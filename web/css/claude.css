@@ -1,0 +1,186 @@
+/* =========================================================================
+   WB-THEME.CSS — единая тема поверх site.css / menu.css / gridv.css
+   =========================================================================
+   ПОДКЛЮЧЕНИЕ: этот файл должен идти ПОСЛЕДНИМ в AppAsset::$css, после
+   site.css, menu.css и gridv.css — иначе переопределения не сработают.
+
+   Ничего в трёх ваших файлах физически не меняю — просто перекрываю
+   нужные места сюда, чтобы у вас остался единый diff и можно было
+   откатить одним файлом.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   1) ЕДИНЫЙ ИСТОЧНИК ЦВЕТА
+   Раньше "фирменный фиолетовый" был в 4 местах с разными оттенками
+   (bg-wb градиент, btn-panel #a73afd, dropdown hover #cb11ab).
+   Теперь один --brand, из которого выводится всё остальное.
+   ------------------------------------------------------------------------- */
+:root {
+  --brand: #8A2BE0;        /* усреднённый тон вашего bg-wb градиента */
+  --brand-deep: #5A1C9C;
+  --brand-tint: #F2E9FB;
+  --ink: #1D1B2A;
+  --ink-soft: #6E6A80;
+  --line: #E6E4EE;
+  --good: #1E9E7C;
+  --good-tint: #E4F5EF;
+  --bad: #E0525C;
+  --bad-tint: #FBEBEC;
+  --radius-card: 12px;      /* как у вашего .div_bordered — не придумываю новое */
+  --shadow-card: 0 4px 6px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.1);
+}
+
+/* -------------------------------------------------------------------------
+   2) ГАРМОНИЗАЦИЯ 6 ГРАДИЕНТНЫХ ШАПОК
+   Идею цветовой маркировки типов отчётов оставляю — это удобно.
+   Но выравниваю угол (97.26deg — уже был у вас, оставляю), количество
+   стопов и кривую светлоты, чтобы все 6 воспринимались как одна палитра,
+   а не случайный набор. Приглушаю самые кричащие (orange, danger).
+   ------------------------------------------------------------------------- */
+.bg-wb {
+  background: linear-gradient(97deg, #7A1FD0 0%, #8A2BE0 35%, #9B4CE8 70%, #A85FEC 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-blue-header {
+  background: linear-gradient(97deg, #0B3FA8 0%, #1857C4 35%, #2E74DE 70%, #4A8FEE 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-danger-header {
+  background: linear-gradient(97deg, #B0173F 0%, #C92656 35%, #DC3E70 70%, #E85E8C 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-orange-header {
+  background: linear-gradient(97deg, #B5560A 0%, #CC6E14 35%, #DE8A2E 70%, #EBA654 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-green-deep-header {
+  background: linear-gradient(97deg, #0B4A2E 0%, #146A42 35%, #1E8858 70%, #2FA470 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-green-vibrant-header {
+  background: linear-gradient(97deg, #0E5C50 0%, #167A69 35%, #229E89 70%, #35BFA8 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+/* все шапки теперь с одинаковым паддингом/типографикой независимо от цвета */
+.card-header[class*="bg-wb"] {
+  padding: 12px 20px !important;
+  font-family: 'Manrope', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  border: none !important;
+}
+
+/* -------------------------------------------------------------------------
+   3) ОБЪЕДИНЕНИЕ .custom-compact-grid И .grid_wbstat
+   Пишу правила на оба класса сразу, чтобы не важно было, какой именно
+   стоит на конкретном гриде — визуально они станут одинаковыми.
+   Рекомендация на будущее: оставить только .custom-compact-grid и
+   постепенно убрать .grid_wbstat, чтобы не поддерживать два имени.
+   ------------------------------------------------------------------------- */
+.custom-compact-grid .card,
+.grid_wbstat .card {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.custom-compact-grid .table,
+.grid_wbstat .table {
+  font-size: 12.5px;
+}
+.custom-compact-grid .table td,
+.custom-compact-grid .table th,
+.grid_wbstat .table td,
+.grid_wbstat .table th {
+  padding: 8px 10px !important;
+  border-color: var(--line) !important;
+}
+.custom-compact-grid .table thead th,
+.grid_wbstat .table thead th {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  border-bottom: 2px solid var(--line) !important;
+}
+.custom-compact-grid .table-striped > tbody > tr:nth-of-type(odd),
+.grid_wbstat .table-striped > tbody > tr:nth-of-type(odd) {
+  background: #FBFAFD;
+}
+.custom-compact-grid .table-hover > tbody > tr:hover,
+.grid_wbstat .table-hover > tbody > tr:hover {
+  background: var(--brand-tint) !important;
+}
+.custom-compact-grid .kv-page-summary td,
+.grid_wbstat .kv-page-summary-container td {
+  background: var(--brand-tint) !important;
+  color: var(--brand-deep) !important;
+  font-weight: 700 !important;
+  border-top: 2px solid var(--brand) !important;
+}
+.custom-compact-grid a,
+.grid_wbstat td a {
+  color: var(--brand);
+  font-weight: 600;
+}
+.custom-compact-grid a:hover,
+.grid_wbstat td a:hover {
+  color: var(--brand-deep);
+  text-decoration: underline !important;
+}
+
+/* toggleData-кнопки — ловим по окончанию id, не завязываясь на номер виджета */
+.custom-compact-grid [id$="-togdata-page"],
+.custom-compact-grid [id$="-togdata-all"],
+.grid_wbstat [id$="-togdata-page"],
+.grid_wbstat [id$="-togdata-all"] {
+  border: 1px solid var(--line) !important;
+  background: #fff !important;
+  color: var(--brand) !important;
+  border-radius: 6px !important;
+}
+.custom-compact-grid [id$="-togdata-page"].active,
+.custom-compact-grid [id$="-togdata-all"].active,
+.grid_wbstat [id$="-togdata-page"].active,
+.grid_wbstat [id$="-togdata-all"].active {
+  background: var(--brand) !important;
+  color: #fff !important;
+  border-color: var(--brand) !important;
+}
+
+/* статусы .label-* (WbCampaign::renderStatusLabel) */
+.label { border-radius: 20px !important; font-weight: 700 !important; }
+.label-success { background: var(--good-tint) !important; color: var(--good) !important; }
+.label-danger  { background: var(--bad-tint) !important;  color: var(--bad) !important; }
+.label-primary { background: var(--brand-tint) !important; color: var(--brand) !important; }
+
+/* -------------------------------------------------------------------------
+   4) MENU.CSS — приводим фирменный цвет к единому --brand
+   ------------------------------------------------------------------------- */
+.dropdown-menu a:hover {
+  color: var(--brand) !important; /* было #cb11ab — теперь тот же тон, что в шапках */
+}
+
+/* -------------------------------------------------------------------------
+   5) SITE.CSS — btn-panel и связанные элементы на единый бренд
+   ------------------------------------------------------------------------- */
+.btn-panel {
+  background-color: var(--brand) !important;
+}
+.btn-panel:hover {
+  background-color: var(--brand-deep) !important;
+}
+.related_list li a:hover {
+  color: var(--brand) !important;
+}
+
+/* -------------------------------------------------------------------------
+   6) МЕЛКИЕ ИСПРАВЛЕНИЯ БАГОВ ИЗ ВАШИХ ФАЙЛОВ
+   ------------------------------------------------------------------------- */
+/* было: .navbar__logout, navbar__login (без точки — мёртвый селектор) */
+.navbar__logout, .navbar__login {
+  bottom: 0;
+}

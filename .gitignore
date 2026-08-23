@@ -1,0 +1,35 @@
+# --- Composer ---
+/vendor
+
+# --- Runtime и кэш ---
+/runtime
+/web/assets
+
+# --- Секреты: реальные конфиги с токенами и паролями ---
+# Разворачивание: скопировать *.example.php -> *.php и заполнить значения
+config/db.php
+config/web.php
+config/params.php
+
+# --- Локальные переопределения и env ---
+.env
+*.local.php
+
+# --- IDE / ОС ---
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Бэкапы и мусорные копии исходников ---
+*.xxx
+*.yyy
+*.old
+*.bak
+*.xx
+
+# --- Загружаемые файлы ---
+/web/uploads/*
+!/web/uploads/.gitkeep

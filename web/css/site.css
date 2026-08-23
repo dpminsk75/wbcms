@@ -1,0 +1,583 @@
+:root {
+  --brand: #8A2BE0;        /* усреднённый тон вашего bg-wb градиента */
+  --brand-deep: #5A1C9C;
+  --brand-tint: #F2E9FB;
+  --ink: #1D1B2A;
+  --ink-soft: #6E6A80;
+  --line: #E6E4EE;
+  --good: #1E9E7C;
+  --good-tint: #E4F5EF;
+  --bad: #E0525C;
+  --bad-tint: #FBEBEC;
+  --radius-card: 12px;      /* как у вашего .div_bordered — не придумываю новое */
+  --shadow-card: 0 4px 6px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.1);
+}
+
+main > .container {
+    padding: 70px 15px 20px;
+}
+
+.site-index h1 { font-size: 30px;}
+.container-xxl h1 {font-size: 30px;}
+
+.footer {
+    background-color: #f5f5f5;
+    font-size: .9em;
+    height: 60px;
+}
+
+.footer > .container {
+    padding-right: 15px;
+    padding-left: 15px;
+}
+
+.not-set {
+    color: #c55;
+    font-style: italic;
+}
+
+/* add sorting icons to gridview sort links */
+a.asc:after, a.desc:after {
+    content: '';
+    left: 3px;
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border: solid 5px transparent;
+    margin: 4px 4px 2px 4px;
+    background: transparent;
+}
+
+a.asc:after {
+    border-bottom: solid 7px #212529;
+    border-top-width: 0;
+}
+
+a.desc:after {
+    border-top: solid 7px #212529;
+    border-bottom-width: 0;
+}
+
+.grid-view th {
+    white-space: nowrap;
+}
+
+.hint-block {
+    display: block;
+    margin-top: 5px;
+    color: #999;
+}
+
+.error-summary {
+    color: #a94442;
+    background: #fdf7f7;
+    border-left: 3px solid #eed3d7;
+    padding: 10px 20px;
+    margin: 0 0 15px 0;
+}
+
+/* align the logout "link" (button in form) of the navbar */
+.nav li > form > button.logout {
+    padding-top: 7px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+@media(max-width:767px) {
+    .nav li > form > button.logout {
+        display:block;
+        text-align: left;
+        width: 100%;
+        padding: 10px 0;
+    }
+}
+
+.nav > li > form > button.logout:focus,
+.nav > li > form > button.logout:hover {
+    text-decoration: none;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.nav > li > form > button.logout:focus {
+    outline: none;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+
+.select2-container .select2-selection--single .select2-selection__clear {
+    color: #ff0000; /* Цвет (например, красный) */
+    position: absolute;
+    right: 3px;
+    top: 5px;
+    font-size: 15px;
+}
+
+.bg-wb {
+/*    background-color: #a73afd !important;*/
+    color: white;
+    background: linear-gradient(97.26deg,#ed3cca .49%,#df34d2 14.88%,#d02bd9 29.27%,#bf22e1 43.14%,#ae1ae8 57.02%,#9a10f0 70.89%,#8306f7 84.76%,#7c1af8 99.15%),linear-gradient(#0000000d,#0000000d) !important;
+}
+
+.navbar__icon--book {
+    cursor: pointer;
+    text-decoration: none;
+    transition: color .3s;
+    display: block;
+    width: 80px;
+}
+.navbar__icon--book:before {
+    content: "";
+    display: inline-block;
+    width: 20px;
+    height: 22px;
+    /* Сама иконка */
+    --icon: url(data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2222%22%20fill%3D%22none%22%3E%3Cpath%20fill%3D%22%23fff%22%20fill-rule%3D%22evenodd%22%20d%3D%22M1.296%204.535%209.297.179a1.471%201.471%200%200%201%201.406%200l8.001%204.356a.41.41%200%200%201-.003.724l-8.01%204.273c-.431.23-.951.23-1.383%200L1.298%205.26a.41.41%200%200%201-.002-.724ZM0%207.495c0-.31.335-.51.613-.363l7.574%204.005c.475.251.771.74.771%201.273v9.16a.417.417%200%200%201-.62.36L.744%2017.705A1.441%201.441%200%200%201%200%2016.447V7.495Zm11.655%2014.456a.417.417%200%200%201-.613-.364v-8.95c0-.522.284-1.004.744-1.26l7.593-4.224a.417.417%200%200%201%20.621.36v9.16c0%20.532-.297%201.022-.771%201.273l-7.574%204.005Z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E);
+
+    /* Маскировка (позволяет менять цвет иконки через background-color) */
+    -webkit-mask: var(--icon) no-repeat center / contain;
+
+    mask-image: var(--icon);
+    background-color: #ffffffdd;
+    position: absolute;
+    top: 0;
+    left: 30px;
+}
+
+.navbar__icon--book_a {
+    position: absolute;
+    bottom: 0px;
+    left: 3px;
+    font-size: 9px;
+    padding: 2px;
+}
+
+.navbar-expand-md .navbar-nav .nav-link {
+    color: #ffffff88 !important;
+}
+
+.navbar-expand-md .navbar-nav .nav-link:hover {
+    color: #ffffff !important;
+}
+
+.navbar__icon--book:hover {
+    color: #ffffff !important;
+}
+
+.navbar-brand {
+    color: #ffffff88;
+    font-weight: 700;
+}
+
+.navbar__logout, .navbar__login {
+    position: absolute;
+    right: 10px;
+}
+
+.grey {
+    color: #555;
+}
+.font_11px, .result_11px {
+    font-size: 12px;
+}
+
+.font_12px, .result_12px {
+    font-size: 12px;
+}
+
+.font_13px, .result_13px {
+    font-size: 13px;
+}
+
+#wbcards-grid .btn-toolbar .btn-group, #dynagrid-product-list .btn-toolbar .btn-group {
+    margin-right: 5px;
+}
+.wb-order-index .btn-toolbar .btn-group {
+    margin-right: 5px;
+}
+
+.badge-grey {
+    color: #444;
+}
+
+.badge-blue {
+    color: #33F;
+}
+
+.btn_30px {
+    width: 30px;
+    height: 30px;
+    padding: 1px;
+}
+
+.btn_200px {
+   width: 200px;
+}
+
+.form__sales-funnel {
+    display: flex;
+    flex-direction: column;
+    width: 600px;
+}
+
+.form__sales-funnel-dates {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: 600px;
+}
+
+.form__sales-funnel-btn {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+}
+.form__date {
+    width: auto;
+    margin: 0px 10px;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.chart-controls {
+    display: flex;
+    flex-direction: row;
+}
+
+.checkbox-group {
+    margin-left: 20px;
+}
+
+/* Контейнер для чекбокса */
+.custom-chk-container {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    padding-left: 35px;
+    margin-right: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+/* Скрываем стандартный инпут */
+.custom-chk-container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+/* Создаем кастомный квадрат (чекбокс) */
+.checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 22px;
+    width: 22px;
+    background-color: #eee;
+    border-radius: 6px; /* Вот наше скругление */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Эффект при наведении */
+.custom-chk-container:hover input ~ .checkmark {
+    background-color: #ccc;
+}
+
+/* Стиль при активном чекбоксе (используем переменную цвета) */
+.custom-chk-container input:checked ~ .checkmark {
+    background-color: var(--chk-color);
+}
+
+/* Рисуем саму птичку (скрыта по умолчанию) */
+.checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+}
+
+/* Показываем птичку при выборе */
+.custom-chk-container input:checked ~ .checkmark:after {
+    display: block;
+}
+
+/* Стили птички (белая галочка) */
+.custom-chk-container .checkmark:after {
+    left: 8px;
+    top: 4px;
+    width: 6px;
+    height: 11px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+
+nav[aria-label="breadcrumb"] {
+    margin-bottom: 16px;
+}
+
+ol.breadcrumb {
+    flex-wrap: wrap;
+    font-size: 12px;
+    line-height: 16px;
+    color: #868695;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.breadcrumb-item {
+    overflow-wrap: break-word;
+    word-break: break-word;
+    align-items: baseline;
+    max-width: 100%;
+/*    margin-right: 8px;*/
+    flex-shrink: 0;
+    padding: 4px 0;
+}
+
+.wb-order-index h1, .wb-sales-index h1 {
+    font-size: 28px;
+    line-height: 36px;
+    align-items: baseline;
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.panel-btns {
+    margin-bottom: 15px;
+}
+
+.panel-btns .btn {
+    margin-right: 5px;
+    font-size: 12px;
+}
+
+.btn-panel,.btn-panel .fa-w-16 {
+    margin-right: 5px;
+}
+
+.btn-panel {
+    background-color: #a73afd;
+    color: #ddd;
+    font-size: 12px;
+}
+
+.btn-panel:hover {
+    background-color: #a73afde6;
+    color: #fff;
+}
+
+.funnel_table table {
+    font-size: 13px;
+}
+
+.funnel_table table th {
+    padding: 10px 5px;
+}
+
+.funnel_table table td {
+    padding: 5px 10px;
+}
+
+.related_list {
+    font-size: 11px;
+    padding: 0px;
+    list-style-type: none;
+}
+
+.related_list li a {
+    text-decoration: none;
+}
+
+.related_list li a:hover {
+    text-decoration: none;
+    color: var(--bs-purple);
+}
+
+
+.weekly-report h1 {
+    margin-bottom: 20px;
+}
+.div_bordered  {
+    background-color: #ffffff; /* Белый фон выглядит чище */
+    border: 1px solid #e0e0e0; /* Тонкая светлая рамка */
+    border-radius: 12px;       /* Заметное скругление углов */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1); /* Мягкая двухслойная тень */
+    padding: 20px;
+    margin: 5px 0px;
+}
+.wb_preview_title {
+    margin: 0px 0px 10px;
+}
+
+.no-list {
+    list-style-type: none; 
+    padding-left: 0;       
+    margin-left: 0;        
+}
+
+.div-chart .btn {height: 32px; width: 34px;}
+
+
+
+/* теги */
+/*
+.tag-badge-custom {
+    display: inline-block;
+    padding: 6px 16px;
+    margin: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    border-radius: 4px 18px 18px 4px; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    cursor: default;
+    transition: transform 0.1s ease;
+}
+
+.tag-badge-custom:hover {
+    transform: scale(1.03);
+    text-decoration: none;
+}
+
+.tag-wrapper-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+}
+*/
+
+.tag-badge-custom {
+    position: relative;
+    display: inline-block;
+    background: #28a745;
+    color: #fff;
+    padding: 5px 20px 8px 10px;
+    margin-right: 10px;
+    /* Форма стрелки через clip-path */
+    clip-path: polygon(0% 0%, 85% 0%, 100% 50%, 85% 100%, 0% 100%);
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.tag-badge-custom:hover, .active-tag .tag-badge-custom {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+}
+
+
+.btn-eye { margin-left: 5px; }
+
+
+.bg-wb-danger-header {
+    background: linear-gradient(
+        97.26deg, 
+        #ff4d4d 0.49%,  /* Яркий кораллово-красный (аналог лилового) */
+        #f73b4c 14.88%, 
+        #ef2a5b 29.27%, 
+        #e31c6a 43.14%, 
+        #d50e7a 57.02%, /* Здесь уходим в мадженту (аналог перехода в фиолетовый) */
+        #c30089 70.89%, 
+        #ae0099 84.76%, 
+        #9900a8 99.15%  /* Финиш в глубокий пурпур */
+    ), 
+    linear-gradient(#0000000d, #0000000d) !important;
+    border: none !important;
+}
+
+
+.bg-wb-danger-header {
+    background: linear-gradient(
+        97.26deg, 
+        #ff4d4d 0.49%,  /* Яркий кораллово-красный (аналог лилового) */
+        #f73b4c 14.88%, 
+        #ef2a5b 29.27%, 
+        #e31c6a 43.14%, 
+        #d50e7a 57.02%, /* Здесь уходим в мадженту (аналог перехода в фиолетовый) */
+        #c30089 70.89%, 
+        #ae0099 84.76%, 
+        #9900a8 99.15%  /* Финиш в глубокий пурпур */
+    ), 
+    linear-gradient(#0000000d, #0000000d) !important;
+    border: none !important;
+}
+
+.bg-wb-orange-header {
+    background: linear-gradient(
+        97.26deg, 
+        #ff4500 0.49%,  /* Насыщенный красно-оранжевый */
+        #ff5e00 14.88%, 
+        #ff7700 29.27%, 
+        #ff8f00 43.14%, 
+        #ffa600 57.02%, /* Переход в чистый оранжевый */
+        #ffbc00 70.89%, 
+        #ffd000 84.76%, 
+        #ffe500 99.15%  /* Финиш в теплое золото */
+    ), 
+    linear-gradient(#0000000d, #0000000d) !important;
+    border: none !important;
+}
+
+.bg-wb-blue-header {
+    background: linear-gradient(
+        97.26deg, 
+        #002fa7 0.49%,  /* Глубокий ультрамарин (международный синий) */
+        #0046c7 14.88%, 
+        #005ce6 29.27%, 
+        #0072ff 43.14%, 
+        #008cff 57.02%, /* Переход в яркий синий */
+        #00a4ff 70.89%, 
+        #00bcff 84.76%, 
+        #00d2ff 99.15%  /* Финиш в сочную лазурь / циан */
+    ), 
+    linear-gradient(#0000000d, #0000000d) !important;
+    border: none !important;
+}
+
+.bg-wb-green-deep-header {
+    background: linear-gradient(
+        97.26deg, 
+        #062e1a 0.49%,  /* Темная хвоя / глубокий лесной */
+        #093e24 14.88%, 
+        #0d4f30 29.27%, 
+        #11613c 43.14%, 
+        #147349 57.02%, /* Переход в насыщенный изумруд */
+        #188556 70.89%, 
+        #1c9864 84.76%, 
+        #20ab72 99.15%  /* Финиш в приглушенный мятно-зеленый */
+    ), 
+    linear-gradient(#0000000d, #0000000d) !important;
+    border: none !important;
+}
+
+
+.bg-wb-green-vibrant-header {
+    background: linear-gradient(
+        97.26deg, 
+        #0b3c36 0.49%,  /* Темный сине-зеленый (база для контраста) */
+        #0f4f45 14.88%, 
+        #136254 29.27%, 
+        #177664 43.14%, 
+        #1b8b75 57.02%, /* Плавный выход в зелень */
+        #1fa086 70.89%, 
+        #24b698 84.76%, 
+        #28ccaa 99.15%  /* Финиш в плотную морскую волну */
+    ), 
+    linear-gradient(#0000000d, #0000000d) !important;
+    border: none !important;
+}

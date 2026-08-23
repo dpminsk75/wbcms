@@ -1,0 +1,225 @@
+/* Основной контейнер меню */
+.wb-menu__list {
+    display: flex !important;
+    flex-direction: row;
+    list-style: none;
+    gap: 15px;
+}
+
+/* Элемент списка */
+.wb-menu__item {
+    position: relative;
+}
+
+/* Ссылка (оформляем как вертикальный стек) */
+.wb-menu__item > a {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center;
+    text-decoration: none;
+    color: #242424;
+    font-size: 13px;
+    padding: 10px;
+}
+
+.wb-icon {
+    margin-bottom: 5px;
+    color: #fff; /* Цвет иконок как на WB color: #484848 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px; /* Фиксированная высота для иконок, чтобы текст не прыгал */
+    margin-bottom: 2px;
+}
+
+.wb-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.wb-text {
+    font-size: 12px;
+    font-weight: 400;
+}
+
+/* Скрываем стрелочку Bootstrap, если она мешает */
+.dropdown-toggle::after {
+    display: none !important;
+}
+
+/* Выпадающее меню */
+.wb-menu__item .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    border: none;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    border-radius: 12px;
+    padding: 10px 0;
+    min-width: 180px;
+}
+
+/* Показ при наведении (hover-эффект вместо клика) */
+.wb-menu__item:hover .dropdown-menu {
+    display: block;
+}
+
+/* Ссылки внутри выпадающего списка */
+.dropdown-menu a {
+    padding: 5px 15px;
+    display: block;
+    color: #333;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.dropdown-menu a:hover {
+    background-color: #f0f0f0;
+    color: #cb11ab; /* Фирменный фиолетовый WB */
+}
+
+
+/* Выравниваем все пункты Nav в одну линию */
+.navbar-nav {
+    display: flex !important;
+    align-items: center; /* Центрирует пункты по вертикали относительно всей шапки */
+    flex-direction: row !important;
+}
+
+/* Ссылка внутри пункта меню */
+.navbar-nav .nav-link {
+    display: flex !important;
+    flex-direction: column !important; /* Иконка над текстом */
+    align-items: center !important;    /* Центрирует текст под иконкой */
+    justify-content: center;
+    padding: 5px 15px !important;
+    color: #fff !important;           /* Белый цвет текста */
+    line-height: 1.2;
+}
+
+.navbar-nav .nav-link {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center;
+    text-align: center;
+}
+
+.wb-text {
+    color: #fff9;
+}
+
+.navbar-nav .nav-link.active {
+    color: #fff !important;
+}
+
+.wb-text:hover, .navbar-brand:hover {
+    color: #fff !important;
+}
+
+
+
+
+
+
+/* Убираем все стили с формы, чтобы она не занимала лишнего места */
+.wb-logout-form {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    height: 100%; /* Чтобы кнопка растянулась на всю высоту nav-item */
+}
+
+/* Обнуляем кнопку до состояния обычной ссылки */
+.wb-logout-btn {
+    background: transparent !important; /* Убираем серый фон */
+    border: none !important;           /* Убираем рамку */
+    padding: 10px 15px !important;     /* Подгоняем под отступы других пунктов */
+    color: #fff !important;            /* Белый текст */
+    display: flex !important;
+    flex-direction: column !important; /* Иконка над текстом */
+    align-items: center !important;    /* Центрируем по горизонтали */
+    justify-content: center !important;/* Центрируем по вертикали */
+    cursor: pointer;
+    font-family: inherit;              /* Наследуем шрифт сайта */
+    line-height: 1.2;
+    transition: opacity 0.2s;
+}
+
+/* Эффект при наведении как у остальных ссылок */
+.wb-logout-btn:hover {
+    opacity: 0.7;
+}
+
+/* Убираем синюю обводку при клике в некоторых браузерах */
+.wb-logout-btn:focus {
+    outline: none !important;
+}
+
+/* Если иконка или текст разъехались, фиксируем размеры */
+.wb-logout-btn .wb-icon {
+    display: flex;
+    margin-bottom: 2px;
+}
+
+.wb-logout-btn .wb-text {
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.navbar__logout, navbar__login {
+    bottom: 0px;
+}
+
+.wb-logout-btn .wb-text:hover {
+    color: #fff !important;
+}
+
+.list-group ul.side-menu-list {
+    list-style-type: none; 
+    padding: 0;           
+    margin: 0; 
+}
+
+.list-group ul.side-menu-list .wb-menu__item ul {
+    list-style-type: none; 
+    padding: 0;           
+    margin: 0px 15px 
+}
+
+.list-group ul.side-menu-list .wb-menu__item ul li > a {
+    text-decoration: none;
+}
+
+
+.list-group ul.side-menu-list .wb-menu__item > a  {
+    align-items: start;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+li.wb-menu__item {
+    font-size: 14px ;
+}
+
+
+.btn_logout {
+    color: rgba(var(--bs-link-color-rgb), var(--bs-link-opacity, 1));
+    text-decoration: none;
+}
+
+.btn_logout:hover {
+    --bs-link-color-rgb: var(--bs-link-hover-color-rgb);
+}
+
+.sidebar_img img {
+    width: 100%;
+    margin: 10px 0px;
+}
+
+.navbar__company-selector {
+    position: absolute;
+    right: 130px;
+}

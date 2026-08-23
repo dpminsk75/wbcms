@@ -1,0 +1,34 @@
+<?php /*
+
+<div class="tag-wrapper-container">
+    <?php 
+    // Получаем теги, отсортированные по приоритету
+    $allTags = \app\models\Tag::find()
+        ->orderBy(['priority' => SORT_DESC, 'name' => SORT_ASC])
+        ->all();
+
+    foreach ($allTags as $tag) {
+        // Выводим с количеством связей (если есть связь getTagCardLinks)
+        $count = count($tag->tagCardLinks); 
+        echo $tag->getTagBadge($count); 
+    }
+    ?>
+</div>
+
+
+
+[
+    'attribute' => 'tags',
+    'label' => 'Теги',
+    'format' => 'raw',
+    'value' => function($model) {
+        // $model здесь — это WbCards
+        $items = [];
+        foreach ($model->tags as $tag) {
+            $items[] = $tag->getTagBadge(); // Вызов метода из модели Tag
+        }
+        return '<div class="tag-wrapper-container">' . implode('', $items) . '</div>';
+    }
+],
+
+*/ ?>

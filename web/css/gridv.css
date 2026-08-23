@@ -1,0 +1,313 @@
+.expandable-container {
+    max-height: 200px;
+    overflow: hidden;
+    position: relative;
+    transition: max-height 0.5s ease-in-out;
+    margin-bottom: 10px;
+}
+
+/* расширяем div  */
+.expandable-container::after {
+    content: "";
+    position: absolute;
+    bottom: 0; left: 0; width: 100%; height: 50px;
+    background: linear-gradient(transparent, white);
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+/* Класс для развернутого состояния */
+.expandable-container.is-expanded {
+    max-height: 50000px; /* С запасом для больших таблиц */
+}
+    
+.expandable-container.is-expanded::after {
+    opacity: 0;
+}
+
+.expand-btn-wrapper {
+    text-align: center;
+    margin-bottom: 30px; /* Отступ между блоками */
+}
+
+
+/* Компактный стиль для таблиц дашборда */
+
+.custom-compact-grid .kv-panel-after {
+    padding: 1px;
+    display: none;
+}
+.custom-compact-grid .card {
+    border-color: var(--bs-border-color-translucent) !important;
+    margin-bottom: 0;
+}
+
+/* Заголовок панели */
+.custom-compact-grid .card-header {
+    padding: 4px 8px !important;
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.custom-compact-grid .card-header h5, 
+.custom-compact-grid .kv-panel-title {
+    font-size: 13px !important;
+    margin: 0 !important;
+    line-height: 1.5;
+}
+
+.custom-compact-grid h3, .grid_wbstat h3 {
+    font-size: 15px !important;
+}
+
+.grid_wbstat .card-header h5, 
+.grid_wbstat .kv-panel-title {
+    font-size: 13px !important;
+    margin: 0 !important;
+    line-height: 1.5;
+}
+
+
+/* Тулбар и кнопки (Все / Страницы / Экспорт) */
+.custom-compact-grid .kv-panel-before {
+    padding: 2px 4px; /* !important;*/
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+}
+
+.custom-compact-grid .btn-group-sm > .btn, 
+.custom-compact-grid [id*="-togdata-"] {
+    padding: 2px 6px !important;
+    font-size: 11px !important;
+}
+
+/* Уменьшаем иконки FontAwesome в кнопках */
+.custom-compact-grid .svg-inline--fa {
+    width: 10px !important;
+    height: 10px !important;
+}
+
+/* Сама таблица: делаем текст плотнее */
+.custom-compact-grid .table {
+    font-size: 12px;
+    margin-bottom: 0;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+.custom-compact-grid .table th {
+    padding: 4px 4px !important;  
+    vertical-align: middle;
+}
+.custom-compact-grid .table td {
+    padding: 4px 4px !important;  
+    vertical-align: middle;
+} 
+
+/* Подвал с итогами (Page Summary) */
+.custom-compact-grid .kv-page-summary td {
+    font-size: 11px;
+    padding: 4px 6px !important;
+    background-color: var(--bs-info-bg-subtle) !important;
+}
+
+.custom-compact-grid .summary  {
+    font-size: 11px;
+    padding: 4px 6px !important;
+}
+
+.grid_wbstat  .summary  {
+    font-size: 11px;
+    padding: 4px 6px !important;
+}
+
+.custom-compact-grid .table { font-size: 12px; }
+.custom-compact-grid .table td, .grid_wbstat .table th {  padding: 4px 4px !important; }
+.custom-compact-grid.table th {text-align: center;}
+.custom-compact-grid input { font-size: 12px; }
+.custom-compact-grid .input-group-text {padding: 4px;}
+.custom-compact-grid a {text-decoration: none; }
+
+.custom-compact-grid .btn-group {margin: 2px 5px;}
+.custom-compact-grid .btn-group .dropdown-menu {padding: 2px; background: #ffe; box-shadow: var(--bs-box-shadow-sm);}
+.custom-compact-grid .btn-group .dropdown-header {padding: 2px 5px; font-size: 13px;}
+.custom-compact-grid .btn-group .dropdown-menu a {padding: 2px 10px; }
+
+.custom-compact-grid .select2-results li.select2-results__option {padding: 5px; font: 12px;}  
+
+.custom-compact-grid__block .table {table-layout: fixed; width: 100%; display: block; border-collapse: collapse; overflow-x: auto; overflow-y: hidden;}
+/*
+.custom-compact-grid .table { table-layout: fixed; width: 100%; overflow-x: auto; overflow-y: hidden; display: block; }
+
+*/
+.dash_div .card.shadow-sm  {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+
+.custom-compact-grid .card, .grid_wbstat .card {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.custom-compact-grid a, .grid_wbstat td a {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+
+.custom-compact-grid .kv-page-summary td, .grid_wbstat .kv-page-summary-container td {
+  background: var(--brand-tint) !important;
+  color: var(--brand-deep) !important;
+  font-weight: 700 !important;
+  border-top: 2px solid var(--brand) !important;
+}
+
+.label { border-radius: 6px !important; font-weight: 400 !important; padding: 2px 4px;}
+.label-success { background: var(--good-tint) !important; color: var(--good) !important; }
+.label-danger  { background: var(--bad-tint) !important;  color: var(--bad) !important; }
+.label-primary { background: var(--brand-tint) !important; color: var(--brand) !important; } 
+
+
+.bg-wb-blue {
+  background: linear-gradient(97deg, #7A1FD0 0%, #8A2BE0 35%, #9B4CE8 70%, #A85FEC 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-blue-header {
+  background: linear-gradient(97deg, #0B3FA8 0%, #1857C4 35%, #2E74DE 70%, #4A8FEE 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-danger-header {
+  background: linear-gradient(97deg, #B0173F 0%, #C92656 35%, #DC3E70 70%, #E85E8C 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-orange-header {
+  background: linear-gradient(97deg, #B5560A 0%, #CC6E14 35%, #DE8A2E 70%, #EBA654 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-green-deep-header {
+  background: linear-gradient(97deg, #0B4A2E 0%, #146A42 35%, #1E8858 70%, #2FA470 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+.bg-wb-green-vibrant-header {
+  background: linear-gradient(97deg, #0E5C50 0%, #167A69 35%, #229E89 70%, #35BFA8 100%),
+              linear-gradient(#0000000d, #0000000d) !important;
+}
+
+
+
+/* карточки на главной */
+/* ============================================================
+   KPI-КАРТОЧКИ ВЕРХНЕГО БЛОКА (_dashboard_top_metrics.php)
+   Разметка: .dash_div .row.g-3 > .col-md-3 .card.bg-light
+   ============================================================ */
+
+.dash_div .card.bg-light {
+  background: #FFFFFF !important;
+  border: 1px solid #E6E4EE !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.1) !important;
+}
+
+.dash_div .text-muted.small.font-weight-bold {
+  color: #6E6A80 !important;
+  font-size: 12.5px !important;
+  letter-spacing: .02em;
+}
+
+.dash_div .h3.font-weight-bold {
+  font-family: 'Manrope', sans-serif;
+  font-size: 26px !important;
+}
+
+/* убираем разнобой цветов чисел — три обычные карточки нейтральные,
+   акцент оставляем только у "Маржи" (hero-карточка ниже) */
+.dash_div .card.bg-light .text-primary,
+.dash_div .card.bg-light .text-info {
+  color: #1D1B2A !important;
+}
+
+.dash_div .card.bg-light .small.mt-1 {
+  color: #6E6A80;
+  font-size: 12.5px;
+}
+
+/* строки НДС/Себестоимость у "Итого к оплате" */
+.dash_div .card.bg-light .text-danger {
+  color: #E0525C !important;
+}
+
+/* если карточка "Итого к оплате" ушла в минус (PHP переключает на
+   bg-danger text-white) — мягкий красный фон вместо кислотного сплошного */
+.dash_div .card.bg-danger.text-white {
+  background: #FBEBEC !important;
+  border: 1px solid #F3C9CC !important;
+  color: #1D1B2A !important;
+}
+.dash_div .card.bg-danger.text-white .text-info {
+  color: #E0525C !important;
+}
+.dash_div .card.bg-danger.text-white .text-muted,
+.dash_div .card.bg-danger.text-white .small {
+  color: #6E6A80 !important;
+}
+
+/* ---------- HERO-КАРТОЧКА: "Маржа" — 4-я карточка в ряду ---------- */
+.dash_div .row.g-3 > .col-md-3:nth-child(4) .card {
+  background: linear-gradient(135deg, #8A2BE0, #5A1C9C) !important;
+  border: none !important;
+}
+.dash_div .row.g-3 > .col-md-3:nth-child(4) .text-muted,
+.dash_div .row.g-3 > .col-md-3:nth-child(4) .small {
+  color: rgba(255,255,255,.78) !important;
+}
+.dash_div .row.g-3 > .col-md-3:nth-child(4) .h3.text-success {
+  color: #fff !important;
+}
+
+.dash_div .card.bg-light,
+.dash_div .card.bg-danger.text-white,
+.dash_div .row.g-3 > .col-md-3:nth-child(4) .card {
+  text-align: left !important;
+}
+
+
+
+/*.grid_no_kv-panel-before .summary {margin-right: 65px;}*/
+.grid_no_kv__summary_25 .summary {margin-right: 25px;}
+.grid_no_kv__summary_65 .summary {margin-right: 65px;}
+.grid_no_kv__summary_100 .summary {margin-right: 100px;}
+
+.grid_no_kv-panel-before .btn-toolbar {position: absolute; top: 8px; right: 10px;}
+.grid_no_kv-panel-before .btn-group {margin-left: 5px;}
+
+.grid_no_kv-panel-before .kv-grid-toolbar .btn-outline-secondary {
+    --bs-btn-color: #fff;
+    --bs-btn-border-color: #fff;
+    --bs-btn-hover-bg: #7A1FD0;
+}
+
+.grid_no_kv-panel-before .kv-grid-toolbar .btn {
+    padding: 4px 5px;
+    font-size: 11px;
+    height: 27px;
+    min-width: 30px;
+}
+
+.grid_no_kv-panel-before .btn-group .btn {
+    padding: 4px 5px;
+    font-size: 11px;
+    height: 27px;
+    min-width: 30px;
+}
+
+.grid_no_kv-panel-before .kv-grid-toolbar .btn .svg-inline--fa {
+    width: 10px;
+}
+
+.grid_no_kv-panel-before .kv-panel-before {
+    padding: 0px;
+}
