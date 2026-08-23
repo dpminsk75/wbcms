@@ -47,7 +47,7 @@ class AggregateController extends Controller
     }
 
     /**
-     * Запуск ПОЛНОГО обновления всех агрегатов по очереди (в рамках одной транзакции)
+     * Запуск ПОЛНОГО обновления всех агрегатов по очереди (каждый шаг независимо)
      * @param string|null $dateFrom Начальная дата (ГГГГ-ММ-ДД)
      * @param string|null $dateTo Конечная дата (ГГГГ-ММ-ДД)
      */
@@ -57,24 +57,30 @@ class AggregateController extends Controller
         $this->stdout("=== НАЧАЛО ПОЛНОГО ОБНОВЛЕНИЯ АГРЕГАТОВ ===\n", Console::FG_CYAN);
         $this->stdout("Период: с $dateFrom по $dateTo\n\n", Console::FG_CYAN);
 
-        $transaction = Yii::$app->db->beginTransaction();
-        try {
-            $this->runUpdateSales($dateFrom, $dateTo);
-            $this->runUpdateOrders($dateFrom, $dateTo);
-            $this->runUpdateDailySummary($dateFrom, $dateTo);
+        $failed = [];
+        foreach ([
+            ['runUpdateSales', 'Продажи (agg_sales_daily_sku)'],
+            ['runUpdateOrders', 'Заказы (agg_orders_daily_sku)'],
+            ['runUpdateDailySummary', 'Финансовая сводка (agg_daily_summary)'],
+        ] as [$method, $label]) {
+            try {
+                $this->$method($dateFrom, $dateTo);
+            } catch (\Throwable $e) {
+                $failed[] = $label;
+                $this->stderr("[ОШИБКА] {$label}: " . $e->getMessage() . "\n", Console::FG_RED);
+            }
+        }
 
-            $transaction->commit();
-            
-            // Сбрасываем кэш дашборда
-            Yii::$app->cache->delete('monthly_finance_dashboard_data');
-            
-            $this->stdout("\n=== ВСЕ АГРЕГАТЫ УСПЕШНО ОБНОВЛЕНЫ ===\n", Console::FG_GREEN);
-            return ExitCode::OK;
-        } catch (\Exception $e) {
-            $transaction->rollBack();
-            $this->stderr("\n[ОШИБКА ОБЩЕЙ ТРАНЗАКЦИИ]: " . $e->getMessage() . "\n", Console::FG_RED);
+        // Сбрасываем кэш дашборда
+        Yii::$app->cache->delete('monthly_finance_dashboard_data');
+
+        if (!empty($failed)) {
+            $this->stderr("\n=== ОБНОВЛЕНИЕ ЗАВЕРШЕНО С ОШИБКАМИ: " . implode('; ', $failed) . " ===\n", Console::FG_RED);
             return ExitCode::UNSPECIFIED_ERROR;
         }
+
+        $this->stdout("\n=== ВСЕ АГРЕГАТЫ УСПЕШНО ОБНОВЛЕНЫ ===\n", Console::FG_GREEN);
+        return ExitCode::OK;
     }
 
     /**
@@ -141,7 +147,7 @@ class AggregateController extends Controller
                     net_profit, f_nds, f_cost_price
                 )
                 SELECT 
-                    COALESCE(p.company_id, 1) AS company_id,
+                    p.company_id AS company_id,
                     DATE(p.sale_dt) AS sdate,
                     p.nm_id,
                     SUM(CASE 
@@ -210,6 +216,7 @@ class AggregateController extends Controller
 
                 FROM `detail_by_period` p
                 WHERE p.sale_dt BETWEEN :from AND :to
+                  AND p.company_id IS NOT NULL
                 GROUP BY p.company_id, DATE(p.sale_dt), p.nm_id
                 ON DUPLICATE KEY UPDATE 
                     qnt = VALUES(qnt),
@@ -248,7 +255,7 @@ class AggregateController extends Controller
                     ppvz_for_pay_sum, delivery_rub_sum, penalty_sum
                 )
                 SELECT 
-                    COALESCE(company_id, 1) as company_id,
+                    company_id as company_id,
                     DATE(sale_dt) as sale_date,
                     nm_id as nmID,
                     MAX(subject_name),
@@ -261,6 +268,7 @@ class AggregateController extends Controller
                     SUM(penalty)
                 FROM detail_by_period
                 WHERE sale_dt BETWEEN :from AND :to
+                  AND company_id IS NOT NULL
                 GROUP BY company_id, DATE(sale_dt), nm_id
                 ON DUPLICATE KEY UPDATE 
                     sales_qty = VALUES(sales_qty),
@@ -286,7 +294,7 @@ class AggregateController extends Controller
                     retail_with_disc_sum, ppvz_for_pay_sum, delivery_forecast_rub
                 )
                 SELECT 
-                    COALESCE(company_id, 1) as company_id,
+                    company_id as company_id,
                     DATE(order_dt) as order_date,
                     nm_id as nmID,
                     MAX(subject_name),
@@ -301,6 +309,7 @@ class AggregateController extends Controller
                 FROM detail_by_period
                 WHERE order_dt BETWEEN :from AND :to
                   AND doc_type_name = 'Продажа'
+                  AND company_id IS NOT NULL
                 GROUP BY company_id, DATE(order_dt), nm_id, site_country
                 ON DUPLICATE KEY UPDATE 
                     orders_qty = VALUES(orders_qty),
@@ -344,12 +353,24 @@ class AggregateController extends Controller
         $this->stdout("Найдено строк удержаний в отчете: " . count($rows) . "\n", Console::FG_GREEN);
 
         // Обнуляем поле ff_otziv за этот период перед пересчетом
-        $db->createCommand("UPDATE `agg_daily_summary` 
-                            SET `ff_otziv` = 0.00 
-                            WHERE `sdate` BETWEEN :from_date AND :to_date", [
-            ':from_date' => $dateFrom,
-            ':to_date' => $dateTo
-        ])->execute();
+        // только у компаний, чьи удержания найдены (чтобы не затереть значения других компаний)
+        $affectedCompanyIds = array_values(array_unique(array_map('intval', array_column($rows, 'company_id'))));
+        if (!empty($affectedCompanyIds)) {
+            $inPlaceholders = [];
+            $resetParams = [':from_date' => $dateFrom, ':to_date' => $dateTo];
+            foreach ($affectedCompanyIds as $i => $cid) {
+                $ph = ':cid' . $i;
+                $inPlaceholders[] = $ph;
+                $resetParams[$ph] = $cid;
+            }
+            $db->createCommand(
+                "UPDATE `agg_daily_summary` 
+                 SET `ff_otziv` = 0.00 
+                 WHERE `sdate` BETWEEN :from_date AND :to_date 
+                   AND `company_id` IN (" . implode(', ', $inPlaceholders) . ")",
+                $resetParams
+            )->execute();
+        }
 
         $updatedFeedbacksCount = 0;
         $summaryUpdates = [];

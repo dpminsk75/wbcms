@@ -40,15 +40,16 @@ class AddressProcessorController extends Controller
             return ExitCode::OK;
         }
 
-        foreach ($rows as $index => $row) {
-            $officeId = $row['ppvz_office_id'];
-            $srid = $row['srid'];
-            $sourceText = $row['ppvz_office_name'] ?: '';
-            $country = $row['site_country'] ?: 'Россия';
-            $hash = !empty($sourceText) ? md5($sourceText) : null;
+        try {
+            foreach ($rows as $index => $row) {
+                $officeId = $row['ppvz_office_id'];
+                $srid = $row['srid'];
+                $sourceText = $row['ppvz_office_name'] ?: '';
+                $country = $row['site_country'] ?: 'Россия';
+                $hash = !empty($sourceText) ? md5($sourceText) : null;
 
-            $detailId = $row['id'];
-            $num = $index + 1;
+                $detailId = $row['id'];
+                $num = $index + 1;
 
             $this->stdout("[$num] ID:$officeId | -" . mb_strimwidth($sourceText, 0, 35, "...") . "- -> ");
 
@@ -127,7 +128,11 @@ class AddressProcessorController extends Controller
             ]);
             $this->linkAddress($detailId, $cacheId);
 */
-            $this->stdout("NOT FOUND (Status 9)\n", Console::FG_RED);
+                $this->stdout("NOT FOUND (Status 9)\n", Console::FG_RED);
+            }
+        } catch (\Exception $e) {
+            $this->stderr("Прервано: " . $e->getMessage() . "\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
         }
 
         return ExitCode::OK;
@@ -273,8 +278,8 @@ class AddressProcessorController extends Controller
 
         // ВЕРНУЛИ: Проверка Forbidden из actionSync
         if ($httpCode == 429 || (isset($decoded['reason']) && $decoded['reason'] === 'Forbidden')) {
-            $this->stdout("\n[!] ОСТАНОВКА: Исчерпан лимит Dadata.\n", Console::FG_RED);
-            exit; // Жесткий выход, чтобы не крутить цикл впустую
+            $this->stderr("\n[!] ОСТАНОВКА: Исчерпан лимит Dadata.\n", Console::FG_RED);
+            throw new \Exception('Dadata limit exhausted (429/Forbidden)');
         }
 
         return $decoded;

@@ -12,6 +12,7 @@ use yii\data\ArrayDataProvider;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\helpers\ArrayHelper;
+use yii\filters\VerbFilter;
 
 class TagController extends Controller
 {
@@ -19,6 +20,18 @@ class TagController extends Controller
      * @var WbOrderRepository
      */
     public $orderRepository;
+
+    public function behaviors()
+    {
+        return [
+            'verbs' => [
+                'class' => VerbFilter::class,
+                'actions' => [
+                    'delete' => ['POST'],
+                ],
+            ],
+        ];
+    }
 
     /**
      * Внедряем репозиторий через конструктор
@@ -69,15 +82,17 @@ class TagController extends Controller
         $chartData = [];
         $summaryProvider = new ArrayDataProvider(['allModels' => []]);
         $detailProvider = new ArrayDataProvider(['allModels' => []]);
+        $detailAgrProvider = new ArrayDataProvider(['allModels' => []]);
+        $relatedCards = [];
 
-        if ($tag && !empty($tag->wbCardIds)) { 
+        if ($tag && !empty($tag->wbCardIds)) {
             $nmIds = $tag->wbCardIds;
 
             $relatedCards = (new \yii\db\Query())
                 ->select(['w.nmId', 'w.title as card_name', 'w.vendorCode as vendorCode'])
                 ->from('tag_card_links t')
-                ->innerJoin('wbcards w', 't.nmID = w.nmID') 
-                ->where(['t.tag_id' => $tag])
+                ->innerJoin('wbcards w', 't.nmID = w.nmID')
+                ->where(['t.tag_id' => $tag->id])
                 ->all();
 
             $summaryData   = $this->orderRepository->getOrdersStats($nmIds, $date_from, $date_to, true, false);

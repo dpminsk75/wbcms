@@ -22,11 +22,7 @@ class WbSalesAnalysisController extends Controller
         $dateTo     = $request->get('date_to', date('Y-m-d', strtotime('-1 day')));
         $reportType = $request->get('report_type', 'revenue'); // revenue или qty
         $topLimit   = (int)$request->get('top_limit', 20);
-        
-        $brand      = $request->get('brand');
-        $subject    = $request->get('subject');
-        $category   = $request->get('category');
-        
+
         $country    = $request->get('country');
         $region     = $request->get('region');
         $oblast     = $request->get('oblast');
@@ -158,7 +154,6 @@ class WbSalesAnalysisController extends Controller
         return $this->render('index', [
             'dataProvider' => $dataProvider,
             'filterData'   => $filterData,
-            'params' => compact('dateFrom', 'dateTo', 'reportType', 'topLimit', 'brand', 'subject', 'category', 'country', 'region', 'oblast'),
             'selectedRegions' => $selectedRegions,
             'selectedOblasts' => $selectedOblasts,
             'selectedTypes' => $selectedTypes,

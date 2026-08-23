@@ -40,11 +40,22 @@ class WbFeedbackTagsController extends Controller
                 continue;
             }
 
-            $decoded = Json::decode($raw);
+            try {
+                $decoded = Json::decode($raw);
+            } catch (\Throwable $e) {
+                $this->stderr("Пропуск bables (битый JSON): " . mb_substr($raw, 0, 80) . " — " . $e->getMessage() . "\n", Console::FG_YELLOW);
+                continue;
+            }
             // На случай двойного кодирования (строка внутри строки)
             $guard = 0;
             while (is_string($decoded) && $guard < 3) {
-                $decoded = Json::decode($decoded);
+                try {
+                    $decoded = Json::decode($decoded);
+                } catch (\Throwable $e) {
+                    $this->stderr("Пропуск bables (битый вложенный JSON): " . $e->getMessage() . "\n", Console::FG_YELLOW);
+                    $decoded = null;
+                    break;
+                }
                 $guard++;
             }
 

@@ -33,3 +33,7 @@ desktop.ini
 # --- Загружаемые файлы ---
 /web/uploads/*
 !/web/uploads/.gitkeep
+
+# --- Локальный контекст (не коммитить) ---
+PROJECT_CONTEXT.md
+structure.sql

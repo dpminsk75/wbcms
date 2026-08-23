@@ -10,9 +10,22 @@ use app\models\WbCard;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\helpers\ArrayHelper;
+use yii\filters\VerbFilter;
 
 class ProductWbCardController extends Controller
 {
+    public function behaviors()
+    {
+        return [
+            'verbs' => [
+                'class' => VerbFilter::class,
+                'actions' => [
+                    'delete' => ['POST'],
+                ],
+            ],
+        ];
+    }
+
     public function actionIndex()
     {
         $searchModel = new ProductWbCardSearch();
