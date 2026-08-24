@@ -10,6 +10,7 @@
 config/db.php
 config/web.php
 config/params.php
+models/User.php
 
 # --- Локальные переопределения и env ---
 .env
