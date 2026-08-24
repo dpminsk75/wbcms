@@ -32,6 +32,9 @@ $config = [
         'companyManager' => [
             'class' => 'app\components\CompanyManager',
         ],
+        'wbHttpClient' => [
+            'class' => 'app\components\WbHttpClient',
+        ],
         'db' => $db,
     ],
 

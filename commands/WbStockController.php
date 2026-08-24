@@ -52,7 +52,7 @@ class WbStockController extends Controller
             while (true) {
                 $this->stdout("Запрос данных offset=$offset... ");
 
-                $data = $this->fetchWbStocks($apiKey, $offset, $limit);
+                $data = $this->fetchWbStocks($apiKey, $companyId, $offset, $limit);
 
                 if ($data === null) {
                     // Ошибка запроса - fetchWbStocks уже вывел детали, прерываем цикл по этой компании
@@ -148,36 +148,28 @@ class WbStockController extends Controller
      *
      * @return array|null Массив строк data.items, [] если данных больше нет, null при ошибке запроса
      */
-    private function fetchWbStocks($apiKey, $offset, $limit)
+    private function fetchWbStocks($apiKey, $companyId, $offset, $limit)
     {
         $url = "https://seller-analytics-api.wildberries.ru/api/analytics/v1/stocks-report/wb-warehouses";
 
-        $payload = json_encode([
+        $payload = [
             'locale' => 'ru',
             'offset' => $offset,
             'limit'  => $limit,
-        ]);
+        ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: ' . $apiKey,
-            'Content-Type: application/json',
-            'Accept: application/json',
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $response = Yii::$app->wbHttpClient->post($url, $payload, $apiKey, $companyId);
+        $httpCode = (int)$response->getStatusCode();
+        $decoded = $response->data;
+        if ($decoded === null) {
+            $decoded = json_decode($response->content, true);
+        }
+        $rawContent = $response->content;
 
         if ($httpCode !== 200) {
-            $this->stderr("\nОшибка API: HTTP $httpCode. Ответ: $response\n", Console::FG_RED);
+            $this->stderr("\nОшибка API: HTTP $httpCode. Ответ: " . ($rawContent ?: json_encode($decoded)) . "\n", Console::FG_RED);
             return null;
         }
-
-        $decoded = json_decode($response, true);
 
         return $decoded['data']['items'] ?? [];
     }

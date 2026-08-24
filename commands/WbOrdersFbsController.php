@@ -128,7 +128,10 @@ class WbOrdersFbsController extends Controller
                             'next' => $next,
                             'dateFrom' => $dateFromTs,
                             'dateTo' => $dateToTs,
-                        ]
+                        ],
+                        null,
+                        5,
+                        $companyId
                     );
                 } catch (\Throwable $e) {
                     $this->stderr("Ошибка запроса сборочных заданий для '{$companyName}': " . $e->getMessage() . "\n", Console::FG_RED);
@@ -226,7 +229,9 @@ class WbOrdersFbsController extends Controller
                         'POST',
                         'https://marketplace-api.wildberries.ru/api/v3/orders/status',
                         [],
-                        ['orders' => array_map('intval', $chunk)]
+                        ['orders' => array_map('intval', $chunk)],
+                        5,
+                        $companyId
                     );
                 } catch (\Throwable $e) {
                     $this->stderr("Ошибка запроса статусов для '{$companyName}': " . $e->getMessage() . "\n", Console::FG_RED);
@@ -457,66 +462,34 @@ class WbOrdersFbsController extends Controller
      * @param string $token Токен кабинета — передаётся как есть в заголовок
      *   Authorization, БЕЗ префикса "Bearer" (подтверждено рабочим тестом).
      */
-    private function apiRequest($token, $method, $url, array $query = [], $body = null, $maxRetries = 5)
+    private function apiRequest($token, $method, $url, array $query = [], $body = null, $maxRetries = 5, $companyId = null)
     {
         if (!empty($query)) {
             $url .= '?' . http_build_query($query);
         }
 
-        $attempt = 0;
-        while (true) {
-            $attempt++;
-
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HEADER => true,
-                CURLOPT_HTTPHEADER => [
-                    'Authorization: ' . $token,
-                    'Content-Type: application/json',
-                ],
-                CURLOPT_CONNECTTIMEOUT => 10,
-                CURLOPT_TIMEOUT => 30,
-            ]);
-
-            if ($method === 'POST') {
-                curl_setopt($ch, CURLOPT_POST, true);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_UNICODE));
-            }
-
-            $raw = curl_exec($ch);
-            $curlError = curl_error($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-            curl_close($ch);
-
-            if ($curlError) {
-                throw new \RuntimeException("cURL ошибка: {$curlError}");
-            }
-
-            $rawHeaders = substr($raw, 0, $headerSize);
-            $rawBody = substr($raw, $headerSize);
-
-            if ($httpCode === 429 && $attempt <= $maxRetries) {
-                $retryAfter = 1;
-                if (preg_match('/Retry-After:\s*(\d+)/i', $rawHeaders, $m)) {
-                    $retryAfter = (int)$m[1];
-                }
-                $this->stdout("  Лимит запросов (429), повтор через {$retryAfter} сек (попытка {$attempt}/{$maxRetries})...\n", Console::FG_YELLOW);
-                sleep(max(1, $retryAfter));
-                continue;
-            }
-
-            if ($httpCode >= 400) {
-                throw new \RuntimeException("HTTP {$httpCode}: {$rawBody}");
-            }
-
-            $decoded = json_decode($rawBody, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new \RuntimeException("Некорректный JSON в ответе: " . json_last_error_msg());
-            }
-
-            return $decoded;
+        $response = null;
+        if ($method === 'POST') {
+            $response = Yii::$app->wbHttpClient->post($url, $body ?? [], $token, $companyId, $maxRetries);
+        } else {
+            $response = Yii::$app->wbHttpClient->get($url, [], $token, $companyId, $maxRetries);
         }
+
+        $httpCode = (int)$response->getStatusCode();
+        $content = $response->content;
+        $decoded = $response->data;
+        if ($decoded === null && $content !== null && $content !== '') {
+            $decoded = json_decode($content, true);
+        }
+
+        if ($httpCode >= 400) {
+            throw new \RuntimeException("HTTP {$httpCode}: {$content}");
+        }
+
+        if ($decoded === null && $content !== null && $content !== '' && json_last_error() !== JSON_ERROR_NONE) {
+            throw new \RuntimeException("Некорректный JSON в ответе: " . json_last_error_msg());
+        }
+
+        return $decoded;
     }
 }

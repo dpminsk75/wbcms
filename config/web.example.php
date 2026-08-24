@@ -36,6 +36,9 @@ $config = [
         'companyManager' => [
             'class' => 'app\components\CompanyManager',
         ],
+        'wbHttpClient' => [
+            'class' => 'app\components\WbHttpClient',
+        ],
         'errorHandler' => [
             'errorAction' => 'site/error',
         ],

@@ -126,7 +126,7 @@ class WbAutoReplyController extends Controller
 
                 // 4. Отправляем ответ по API
                 $this->stdout("Отправка ответа в WB API...\n", Console::FG_GREY);
-                $sendResult = $this->sendAnswerToWb($token, $fb['id'], $replyText);
+                $sendResult = $this->sendAnswerToWb($token, $fb['id'], $replyText, $company['id']);
 
                 if ($sendResult['success']) {
                     $this->stdout("Ожидание 3 секунды...\n", Console::FG_GREY);
@@ -134,7 +134,7 @@ class WbAutoReplyController extends Controller
 
                     // 5. Проверяем публикацию
                     $this->stdout("Проверка публикации ответа...\n", Console::FG_GREY);
-                    $publishedAnswer = $this->checkPublishedAnswer($token, $fb['id']);
+                    $publishedAnswer = $this->checkPublishedAnswer($token, $fb['id'], $company['id']);
 
                     if ($publishedAnswer) {
                         // 6. Сохраняем в БД и явно помечаем, что ответили именно МЫ
@@ -235,7 +235,7 @@ class WbAutoReplyController extends Controller
         $this->stdout("Сгенерированный ответ:\n{$replyText}\n", Console::FG_GREEN);
 
         $this->stdout("Отправка ответа в WB API...\n", Console::FG_GREY);
-        $sendResult = $this->sendAnswerToWb($token, $fb['id'], $replyText);
+        $sendResult = $this->sendAnswerToWb($token, $fb['id'], $replyText, $company['id']);
 
         if (!$sendResult['success']) {
             $this->stderr("[ERROR] Ошибка при отправке ответа в WB API. HTTP: {$sendResult['httpCode']}. Ответ сервера: {$sendResult['body']}\n", Console::FG_RED);
@@ -246,7 +246,7 @@ class WbAutoReplyController extends Controller
         sleep(3);
 
         $this->stdout("Проверка публикации ответа...\n", Console::FG_GREY);
-        $publishedAnswer = $this->checkPublishedAnswer($token, $fb['id']);
+        $publishedAnswer = $this->checkPublishedAnswer($token, $fb['id'], $company['id']);
 
         if (!$publishedAnswer) {
             $this->stderr("[ERROR] Ответ отправлен, но при проверке не найден в WB API (feedback ID {$fb['id']}).\n", Console::FG_RED);
@@ -373,57 +373,45 @@ class WbAutoReplyController extends Controller
      * Возвращает ['success' => bool, 'httpCode' => int, 'body' => string] — тело ответа
      * нужно для диагностики, если WB вернёт ошибку в JSON при httpCode 200/4xx.
      */
-    private function sendAnswerToWb($token, $feedbackId, $text)
+    private function sendAnswerToWb($token, $feedbackId, $text, $companyId = null)
     {
         $url = 'https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer';
-        $payload = Json::encode([
+        $payload = [
             'id' => $feedbackId,
             'text' => $text,
-        ]);
+        ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true); // Документация WB: POST для /feedbacks/answer
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: ' . $token,
-            'Content-Type: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $response = Yii::$app->wbHttpClient->post($url, $payload, $token, $companyId);
+        $httpCode = (int)$response->getStatusCode();
+        $content = $response->content;
 
         return [
-            // WB API возвращает 200 или 204 (No Content) при успешной отправке ответа
             'success' => in_array($httpCode, [200, 204], true),
             'httpCode' => $httpCode,
-            'body' => $response,
+            'body' => $content,
         ];
     }
 
     /**
      * Проверка публикации ответа через GET /api/v1/feedback
      */
-    private function checkPublishedAnswer($token, $feedbackId)
+    private function checkPublishedAnswer($token, $feedbackId, $companyId = null)
     {
         $url = "https://feedbacks-api.wildberries.ru/api/v1/feedback?id={$feedbackId}";
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: ' . $token,
-            'Content-Type: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = Yii::$app->wbHttpClient->get($url, [], $token, $companyId);
+        $httpCode = (int)$response->getStatusCode();
+        $content = $response->content;
+        $data = $response->data;
+        if ($data === null && $content) {
+            try {
+                $data = Json::decode($content);
+            } catch (\Throwable $e) {
+                $data = null;
+            }
+        }
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode === 200 && $response) {
-            $data = Json::decode($response);
+        if ($httpCode === 200 && $data) {
             if (isset($data['data']['answer']['text']) && trim($data['data']['answer']['text']) !== '') {
                 return $data['data']['answer']['text'];
             }
@@ -455,24 +443,23 @@ class WbAutoReplyController extends Controller
                     'dateTo' => $dateTo,
                 ];
 
-                $ch = curl_init($url . '?' . http_build_query($params));
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                    'Authorization: ' . $token,
-                    'Content-Type: application/json',
-                ]);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                $fullUrl = $url . '?' . http_build_query($params);
+                $response = Yii::$app->wbHttpClient->get($fullUrl, [], $token, $companyId);
+                $httpCode = (int)$response->getStatusCode();
+                $content = $response->content;
+                $data = $response->data;
+                if ($data === null && $content) {
+                    try {
+                        $data = Json::decode($content);
+                    } catch (\Throwable $e) {
+                        $data = null;
+                    }
+                }
 
-                $response = curl_exec($ch);
-                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                if ($httpCode !== 200 || !$response) {
+                if ($httpCode !== 200 || !$data) {
                     $this->stderr("Ошибка синхронизации (isAnswered={$isAnswered}, skip={$skip}). HTTP: {$httpCode}\n", Console::FG_RED);
                     break;
                 }
-
-                $data = Json::decode($response);
                 $feedbacks = $data['data']['feedbacks'] ?? [];
                 $count = count($feedbacks);
 

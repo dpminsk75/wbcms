@@ -17,11 +17,6 @@ class WbAdvSyncController extends Controller
     public function init()
     {
         parent::init();
-//        $this->token = Yii::$app->params['wbApiTokenContent'];
-        $this->client = new \yii\httpclient\Client([
-            'baseUrl' => 'https://advert-api.wildberries.ru',
-            'requestConfig' => ['format' => \yii\httpclient\Client::FORMAT_JSON],
-        ]);
     }
 /*
 public function actionIndex()
@@ -104,9 +99,7 @@ public function actionIndex()
             echo "\n=== КОМПАНИЯ: {$company['name']} ===\n";
             echo "1. Получение данных через /promotion/count...\n";
             
-            $response = $this->client->get('/adv/v1/promotion/count', [], [
-                'Authorization' => $this->token
-            ])->send();
+            $response = Yii::$app->wbHttpClient->get('https://advert-api.wildberries.ru/adv/v1/promotion/count', [], $this->token, $companyId);
 
             if (!$response->isOk) {
                 echo "Ошибка API. Код: " . $response->getStatusCode() . "\n";
@@ -429,9 +422,7 @@ protected function updateCampaignItems($campaignId, $adData)
         $chunks = array_chunk($ids, 50);
 
         foreach ($chunks as $chunk) {
-            $response = $this->client->get('/api/advert/v2/adverts', ['id' => $chunk], [
-                'Authorization' => $this->token,
-            ])->send();
+            $response = Yii::$app->wbHttpClient->get('https://advert-api.wildberries.ru/api/advert/v2/adverts', ['id' => $chunk], $this->token, $companyId);
 
             if (!$response->isOk) continue;
 
@@ -513,10 +504,7 @@ protected function syncStats($ids, $companyId, $beginDate = null, $endDate = nul
 
         echo $url."\n";
 
-        $response = $this->client->get($url, [], [
-            'Authorization' => $this->token,
-            'Accept' => 'application/json',
-        ])->send();
+        $response = Yii::$app->wbHttpClient->get('https://advert-api.wildberries.ru' . $url, [], $this->token, $companyId);
 
         echo "[" . ($index + 1) . "/$totalChunks] Статус: " . $response->getStatusCode() . "\n";
 
@@ -525,11 +513,11 @@ protected function syncStats($ids, $companyId, $beginDate = null, $endDate = nul
             // Если всё еще пишет 'ids is required', значит WB ждет массив ?ids=1&ids=2
             if (strpos(json_encode($response->data), 'ids') !== false) {
                  echo "Пробую альтернативный формат (массив ids)... \n";
-                 $response = $this->client->get('/adv/v3/fullstats', [
-                     'ids' => $chunk, // HttpClient сделает ids=1&ids=2
+                 $response = Yii::$app->wbHttpClient->get('https://advert-api.wildberries.ru/adv/v3/fullstats', [
+                     'ids' => $chunk,
                      'beginDate' => $beginDate,
                      'endDate' => $endDate
-                 ], ['Authorization' => $this->token])->send();
+                 ], $this->token, $companyId);
                  echo "Новый статус: " . $response->getStatusCode() . "\n";
             }
         }
@@ -980,13 +968,7 @@ protected function syncQueries($campaignIds, $dateFrom, $dateTo, $companyId)
                 'items' => $chunk
             ];
 
-            $response = $this->client->post('/adv/v0/normquery/stats', 
-                json_encode($payload),
-                [
-                    'Authorization' => $this->token,
-                    'Content-Type' => 'application/json',
-                ]
-            )->send();
+            $response = Yii::$app->wbHttpClient->post('https://advert-api.wildberries.ru/adv/v0/normquery/stats', $payload, $this->token, $companyId);
 
             if ($response->isOk && !empty($response->data)) {
 //                $this->parseQueryBatch($response->data, $currentDate);

@@ -54,7 +54,7 @@ class WbSalesController extends Controller
             // но для синхронизации мы использовали flag=1.
             $url = "https://statistics-api.wildberries.ru/api/v1/supplier/sales?flag=0&dateFrom=" . urlencode($dateFrom);
 
-            $response = $this->makeRequest($url, $token);
+            $response = $this->makeRequest($url, $token, $companyId);
 
             if (!$response) {
                 $this->stderr("Не удалось получить данные для компании '{$companyName}'\n", Console::FG_RED);
@@ -120,31 +120,21 @@ class WbSalesController extends Controller
     /**
      * Вспомогательный метод для запроса
      */
-    private function makeRequest($url, $token)
+    private function makeRequest($url, $token, $companyId = null)
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: ' . $token,
-            'Accept: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $response = Yii::$app->wbHttpClient->get($url, [], $token, $companyId);
+        $httpCode = (int)$response->getStatusCode();
+        $content = $response->content;
 
         $this->stdout("HTTP CODE: $httpCode\n");
-
-        // Выводим начало ответа (или весь, если он короткий)
-        $this->stdout("RAW RESPONSE: " . mb_strimwidth($response, 0, 1000, "...") . "\n");
+        $this->stdout("RAW RESPONSE: " . mb_strimwidth($content, 0, 1000, "...") . "\n");
 
         if ($httpCode !== 200) {
             $this->stderr("!!! Ошибка API WB (Код: $httpCode)\n", Console::FG_RED);
             return null;
         }
 
-        return $response;
+        return $content;
     }
 
     /**
@@ -231,7 +221,7 @@ class WbSalesController extends Controller
     private function linkSaleToOrder($item, $companyId)
     {
         try {
-            return WbOrder::updateAll(
+            $affected = WbOrder::updateAll(
                 [
                     'sale_id' => $item['saleID'],
                     'income_id' => $item['incomeID'] ?? null,
@@ -239,9 +229,24 @@ class WbSalesController extends Controller
                 ],
                 [
                     'srid' => $item['srid'],
-                    'company_id' => $companyId,
                 ]
             );
+            if ($affected === 0) {
+                // updateAll возвращает 0 и когда строка уже содержит те же значения (MySQL affected_rows=0)
+                // отличим "уже актуально" от "не найдено" отдельной проверкой
+                $exists = Yii::$app->db->createCommand("SELECT srid FROM wb_order WHERE srid=:srid LIMIT 1", [':srid' => $item['srid']])->queryScalar();
+                if ($exists !== false) {
+                    return 1;
+                }
+                static $debugCount = 0;
+                if ($debugCount < 5) {
+                    $debugCount++;
+                    $srid = $item['srid'] ?? 'null';
+                    $likeCnt = Yii::$app->db->createCommand("SELECT COUNT(*) FROM wb_order WHERE srid LIKE :like", [':like' => '%' . substr($srid, 0, 20) . '%'])->queryScalar();
+                    $this->stderr("DEBUG srid={$srid} НЕ найден в wb_order (like 20 симв: cnt={$likeCnt})\n", Console::FG_YELLOW);
+                }
+            }
+            return $affected;
         } catch (\Throwable $e) {
             $this->stderr("Исключение при обновлении wb_order (srid {$item['srid']}): " . $e->getMessage() . "\n", Console::FG_RED);
             return 0;

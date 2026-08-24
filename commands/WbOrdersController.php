@@ -53,7 +53,7 @@ class WbOrdersController extends Controller
             $url = "https://statistics-api.wildberries.ru/api/v1/supplier/orders?dateFrom=" . urlencode($dateFrom);
 
             $this->stdout("url: $url \n", Console::FG_CYAN);
-            $response = $this->makeRequest($url, $token);
+            $response = $this->makeRequest($url, $token, $companyId);
 
             if ($response === null) {
                 $this->stderr("Не удалось получить данные для компании '{$companyName}'\n", Console::FG_RED);
@@ -144,7 +144,7 @@ class WbOrdersController extends Controller
                 'end'   => $periodEnd,
             ];
 
-            $result = $this->fetchAllOrderFeedOrders($url, $token, $selectedPeriod, $companyName);
+            $result = $this->fetchAllOrderFeedOrders($url, $token, $companyId, $selectedPeriod, $companyName);
 
             if ($result === null) {
                 $this->stderr("Не удалось получить данные для компании '{$companyName}'\n", Console::FG_RED);
@@ -222,7 +222,7 @@ class WbOrdersController extends Controller
             ],
         ];
 
-        $response = $this->makePostRequest($url, $company['api_key'], $body);
+        $response = $this->makePostRequest($url, $company['api_key'], $body, $company['id']);
 
         if ($response === null) {
             $this->stderr("Не удалось получить ответ от API.\n", Console::FG_RED);
@@ -242,82 +242,37 @@ class WbOrdersController extends Controller
     }
 
     /**
-     * Запрос к API WB с retry на 429 (Too Many Requests)
+     * Запрос к API WB (GET) через WbHttpClient с учётом company_id для логов и ретраев.
      */
-    private function makeRequest($url, $token)
+    private function makeRequest($url, $token, $companyId = null)
     {
-        $doRequest = function () use ($url, $token) {
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Authorization: ' . $token,
-                'Accept: application/json',
-            ]);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        $response = Yii::$app->wbHttpClient->get($url, [], $token, $companyId);
+        $httpCode = (int)$response->getStatusCode();
+        $content = $response->content;
 
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            return [$response, $httpCode];
-        };
-
-        [$response, $httpCode] = $doRequest();
-
-        if ($httpCode == 429) {
-            $this->stdout("Превышен лимит запросов (429). Ждем 61 секунду...\n", Console::FG_YELLOW);
-            sleep(61);
-            [$response, $httpCode] = $doRequest();
-        }
-
-        if ($httpCode != 200) {
+        if ($httpCode !== 200) {
             $this->stderr("Ошибка выполнения запроса: HTTP код {$httpCode}\n", Console::FG_RED);
             return null;
         }
 
-        return $response;
+        return $content;
     }
 
     /**
-     * POST-запрос к API WB с JSON-телом и retry на 429 (Too Many Requests).
+     * POST-запрос к API WB с JSON-телом через WbHttpClient.
      */
-    private function makePostRequest($url, $token, array $body)
+    private function makePostRequest($url, $token, array $body, $companyId = null)
     {
-        $payload = Json::encode($body);
+        $response = Yii::$app->wbHttpClient->post($url, $body, $token, $companyId);
+        $httpCode = (int)$response->getStatusCode();
+        $content = $response->content;
 
-        $doRequest = function () use ($url, $token, $payload) {
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Authorization: ' . $token,
-                'Accept: application/json',
-                'Content-Type: application/json',
-            ]);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            return [$response, $httpCode];
-        };
-
-        [$response, $httpCode] = $doRequest();
-
-        if ($httpCode == 429) {
-            $this->stdout("Превышен лимит запросов (429). Ждем 61 секунду...\n", Console::FG_YELLOW);
-            sleep(61);
-            [$response, $httpCode] = $doRequest();
-        }
-
-        if ($httpCode != 200) {
-            $this->stderr("Ошибка выполнения запроса: HTTP код {$httpCode}. Ответ: " . substr((string)$response, 0, 500) . "\n", Console::FG_RED);
+        if ($httpCode !== 200) {
+            $this->stderr("Ошибка выполнения запроса: HTTP код {$httpCode}. Ответ: " . substr((string)$content, 0, 500) . "\n", Console::FG_RED);
             return null;
         }
 
-        return $response;
+        return $content;
     }
 
     /**
@@ -334,7 +289,7 @@ class WbOrdersController extends Controller
      *
      * @return array{orders: array, snapshotTime: ?string, pages: int}|null null при ошибке запроса
      */
-    private function fetchAllOrderFeedOrders(string $url, string $token, array $selectedPeriod, string $companyName): ?array
+    private function fetchAllOrderFeedOrders(string $url, string $token, ?int $companyId, array $selectedPeriod, string $companyName): ?array
     {
         $limit = 1000;
         $offset = 0;
@@ -356,7 +311,7 @@ class WbOrdersController extends Controller
                 'pagination'     => $pagination,
             ];
 
-            $response = $this->makePostRequest($url, $token, $body);
+            $response = $this->makePostRequest($url, $token, $body, $companyId);
             if ($response === null) {
                 $this->stderr("Ошибка получения страницы {$page} (offset={$offset}) для '{$companyName}'.\n", Console::FG_RED);
                 return $allOrders ? ['orders' => $allOrders, 'snapshotTime' => $snapshotTime, 'pages' => $page - 1] : null;

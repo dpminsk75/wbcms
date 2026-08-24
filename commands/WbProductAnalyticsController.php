@@ -70,7 +70,7 @@ class WbProductAnalyticsController extends Controller
             while (true) {
                 $this->stdout("Запрос offset=$offset... ");
 
-                $items = $this->fetchProductsReport($apiKey, $periodStart, $periodEnd, $offset, $limit);
+                $items = $this->fetchProductsReport($apiKey, $companyId, $periodStart, $periodEnd, $offset, $limit);
 
                 if ($items === null) {
                     break; // ошибка уже выведена в fetchProductsReport
@@ -165,11 +165,11 @@ class WbProductAnalyticsController extends Controller
     /**
      * @return array|null Список item'ов, [] если данных больше нет, null при ошибке
      */
-    private function fetchProductsReport($apiKey, $periodStart, $periodEnd, $offset, $limit)
+    private function fetchProductsReport($apiKey, $companyId, $periodStart, $periodEnd, $offset, $limit)
     {
         $url = "https://seller-analytics-api.wildberries.ru/api/v2/stocks-report/products/products";
 
-        $payload = json_encode([
+        $payload = [
             'nmIDs'               => [],
             'currentPeriod'       => ['start' => $periodStart, 'end' => $periodEnd],
             'stockType'           => $this->stockType,
@@ -178,28 +178,20 @@ class WbProductAnalyticsController extends Controller
             'availabilityFilters' => ['deficient', 'actual', 'balanced', 'nonActual', 'nonLiquid', 'invalidData'],
             'limit'               => $limit,
             'offset'              => $offset,
-        ]);
+        ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: ' . $apiKey,
-            'Content-Type: application/json',
-            'Accept: application/json',
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $response = Yii::$app->wbHttpClient->post($url, $payload, $apiKey, $companyId);
+        $httpCode = (int)$response->getStatusCode();
+        $decoded = $response->data;
+        if ($decoded === null) {
+            $decoded = json_decode($response->content, true);
+        }
+        $rawContent = $response->content;
 
         if ($httpCode !== 200) {
-            $this->stderr("\nОшибка API: HTTP $httpCode. Ответ: $response\n", Console::FG_RED);
+            $this->stderr("\nОшибка API: HTTP $httpCode. Ответ: " . ($rawContent ?: json_encode($decoded)) . "\n", Console::FG_RED);
             return null;
         }
-
-        $decoded = json_decode($response, true);
 
         return $decoded['data']['items'] ?? [];
     }

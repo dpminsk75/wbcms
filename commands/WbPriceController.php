@@ -61,7 +61,7 @@ class WbPriceController extends Controller
             while (true) {
                 $this->stdout("Запрос данных offset=$offset... ");
 
-                [$httpCode, $goods] = $this->fetchWbPrices($apiKey, $offset, $limit, $nmId);
+                [$httpCode, $goods] = $this->fetchWbPrices($apiKey, $companyId, $offset, $limit, $nmId);
 
                 $this->stdout("HTTP $httpCode. ");
 
@@ -267,7 +267,7 @@ class WbPriceController extends Controller
      *
      * @return array [httpCode, items|null] items = null означает ошибку запроса
      */
-    private function fetchWbPrices($apiKey, $offset, $limit, $nmId = null)
+    private function fetchWbPrices($apiKey, $companyId, $offset, $limit, $nmId = null)
     {
         $query = [
             'limit' => $limit,
@@ -280,23 +280,18 @@ class WbPriceController extends Controller
 
         $url = "https://discounts-prices-api.wildberries.ru/api/v2/list/goods/filter?" . http_build_query($query);
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: ' . $apiKey,
-            'Accept: application/json',
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200) {
-            $this->stderr("\nОшибка API: HTTP $httpCode. Ответ: $response\n", Console::FG_RED);
-            return [$httpCode, null];
+        $response = Yii::$app->wbHttpClient->get($url, [], $apiKey, $companyId);
+        $httpCode = $response->getStatusCode();
+        $decoded = $response->data;
+        if ($decoded === null) {
+            $decoded = json_decode($response->content, true);
         }
+        $rawContent = $response->content;
 
-        $decoded = json_decode($response, true);
+        if ((int)$httpCode !== 200) {
+            $this->stderr("\nОшибка API: HTTP $httpCode. Ответ: " . ($rawContent ?: json_encode($decoded)) . "\n", Console::FG_RED);
+            return [(int)$httpCode, null];
+        }
 
         if (!empty($decoded['error'])) {
             $this->stderr("\nОшибка API: " . ($decoded['errorText'] ?? 'unknown') . "\n", Console::FG_RED);

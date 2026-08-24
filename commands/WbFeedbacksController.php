@@ -105,7 +105,7 @@ class WbFeedbacksController extends Controller
                     while ($hasMore) {
                         $this->stdout("ФОРМИРОВАНИЕ ЗАПРОСА (skip={$skip}, take={$take}):\n", Console::FG_CYAN);
                         
-                        $response = $this->fetchFeedbacks($token, $startTimestamp, $endTimestamp, $skip, $take, $isAnswered);
+                        $response = $this->fetchFeedbacks($token, $startTimestamp, $endTimestamp, $skip, $take, $isAnswered, $companyId);
 
                         if (empty($response) || !isset($response['data']['feedbacks'])) {
                             $this->stdout("Данные от API не получены или структура ответа неверна.\n", Console::FG_YELLOW);
@@ -149,7 +149,7 @@ class WbFeedbacksController extends Controller
             while ($hasMoreArchive) {
                 $this->stdout("ФОРМИРОВАНИЕ ЗАПРОСА К АРХИВУ (skip={$skipArchive}, take={$take}):\n", Console::FG_CYAN);
                 
-                $response = $this->fetchArchiveFeedbacks($token, $skipArchive, $take);
+                $response = $this->fetchArchiveFeedbacks($token, $skipArchive, $take, $companyId);
 
                 if (empty($response) || !isset($response['data']['feedbacks'])) {
                     $this->stdout("Данные архива от API не получены или структура ответа неверна.\n", Console::FG_YELLOW);
@@ -216,7 +216,7 @@ class WbFeedbacksController extends Controller
     /**
      * Запрос к стандартному WB API v1/feedbacks
      */
-    protected function fetchFeedbacks($token, $dateFrom, $dateTo, $skip, $take, $isAnswered)
+    protected function fetchFeedbacks($token, $dateFrom, $dateTo, $skip, $take, $isAnswered, $companyId = null)
     {
         $url = 'https://feedbacks-api.wildberries.ru/api/v1/feedbacks';
         $params = [
@@ -227,13 +227,13 @@ class WbFeedbacksController extends Controller
             'dateTo' => $dateTo,
         ];
 
-        return $this->sendCurlRequest($url . '?' . http_build_query($params), $token);
+        return $this->sendCurlRequest($url . '?' . http_build_query($params), $token, $companyId);
     }
 
     /**
-     * Запрос к архивному WB API v1/feedbacks/archive
-     */
-    protected function fetchArchiveFeedbacks($token, $skip, $take)
+      * Запрос к архивному WB API v1/feedbacks/archive
+      */
+    protected function fetchArchiveFeedbacks($token, $skip, $take, $companyId = null)
     {
         $url = 'https://feedbacks-api.wildberries.ru/api/v1/feedbacks/archive';
         $params = [
@@ -241,13 +241,13 @@ class WbFeedbacksController extends Controller
             'skip' => $skip,
         ];
 
-        return $this->sendCurlRequest($url . '?' . http_build_query($params), $token);
+        return $this->sendCurlRequest($url . '?' . http_build_query($params), $token, $companyId);
     }
 
     /**
      * Универсальная отправка cURL запроса с логированием для поддержки
      */
-    private function sendCurlRequest($fullUrl, $token)
+    private function sendCurlRequest($fullUrl, $token, $companyId = null)
     {
         $curlDebug = sprintf(
             "curl -X GET \"%s\" \\\n  -H \"Authorization: %s\" \\\n  -H \"Content-Type: application/json\"",
@@ -258,26 +258,25 @@ class WbFeedbacksController extends Controller
         $this->stdout("Запрос URL: {$fullUrl}\n", Console::FG_GREY);
         $this->stdout("cURL команда для техподдержки:\n{$curlDebug}\n\n", Console::FG_GREY);
 
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $fullUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: ' . $token,
-            'Content-Type: application/json'
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $response = Yii::$app->wbHttpClient->get($fullUrl, [], $token, $companyId);
+        $httpCode = (int)$response->getStatusCode();
+        $content = $response->content;
+        $decoded = $response->data;
+        if ($decoded === null && $content !== null) {
+            try {
+                $decoded = Json::decode($content);
+            } catch (\Throwable $e) {
+                $decoded = null;
+            }
+        }
 
         if ($httpCode !== 200) {
             $this->stdout("Ошибка WB API (HTTP Код: {$httpCode})\n", Console::FG_RED);
-            $this->stdout("Ответ сервера: {$response}\n\n", Console::FG_RED);
+            $this->stdout("Ответ сервера: {$content}\n\n", Console::FG_RED);
             return null;
         }
 
-        return Json::decode($response);
+        return $decoded;
     }
 
     /**
