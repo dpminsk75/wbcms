@@ -170,7 +170,7 @@
 }
 
 .navbar__logout, navbar__login {
-    bottom: 0px;
+    bottom: -3px;
 }
 
 .wb-logout-btn .wb-text:hover {
@@ -219,7 +219,28 @@ li.wb-menu__item {
     margin: 10px 0px;
 }
 
+.nav > li.navbar__company-selector {
+    position: absolute !important;
+    right: 130px !important;
+    display: flex !important;
+}
+/*
 .navbar__company-selector {
     position: absolute;
     right: 130px;
+}
+*/
+
+.nav > li.navbar__logout {
+    position: absolute;
+    right: 10px;
+}
+
+.nav > li > a:hover, .nav > li > a:focus {
+    background: transparent !important;
+}
+
+
+.h-72 {
+  height: 72px;
 }

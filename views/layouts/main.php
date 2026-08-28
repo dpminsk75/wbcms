@@ -74,14 +74,14 @@ $this->registerLinkTag(['rel' => 'icon',         'type' => 'image/x-icon', 'href
             'style' => 'height:30px; vertical-align: middle; margin-right: 10px;' 
         ]) . 'Аналитика WB', 
 //        'options' => ['class' => '1']
-        'options' => ['class' => 'navbar-nav navbar-expand wb-menu__list bg-wb'],
+        'options' => ['class' => 'navbar-nav navbar-expand wb-menu__list bg-wb w-100'],
 //        'options' => ['class' => 'wb-menu__list'],
 
     ]);
 
     echo Nav::widget([
         'encodeLabels' => false, // ВАЖНО: чтобы HTML в label работал
-        'options' => ['class' => 'navbar-nav wb-menu__list'],
+        'options' => ['class' => 'navbar-nav wb-menu__list w-100'],
         'items' => $topMenuItems, // \Yii::$app->params['mainMenu'],
     ]);
     NavBar::end();

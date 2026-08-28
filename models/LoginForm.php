@@ -60,7 +60,20 @@ class LoginForm extends Model
     public function login()
     {
         if ($this->validate()) {
-            return Yii::$app->user->login($this->getUser(), $this->rememberMe ? 3600 * 24 * 30 : 0);
+            $user = $this->getUser();
+            $ok = Yii::$app->user->login($user, $this->rememberMe ? 3600 * 24 * 30 : 0);
+            if ($ok && !$user->getIsNewRecord()) {
+                // Da\User хранит last_login_at / last_login_ip отдельно от Yii::$app->user
+                try {
+                    $user->updateAttributes([
+                        'last_login_at' => time(),
+                        'last_login_ip' => Yii::$app->request->userIP,
+                    ]);
+                } catch (\Throwable $e) {
+                    Yii::error('last_login update failed: ' . $e->getMessage(), __METHOD__);
+                }
+            }
+            return $ok;
         }
         return false;
     }

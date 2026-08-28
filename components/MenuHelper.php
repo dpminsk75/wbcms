@@ -160,12 +160,17 @@ class MenuHelper
             ],
 
         [
-            'label' => 'Администрирование',
+            'label' => 'Админка',
             'icon' => 'data',
             'url' => ['#'],
-	        'visibleIn' => ['side'],
+            'visible' => Yii::$app->user->can('admin') || Yii::$app->user->can('manageUsers'),
+            'visibleIn' => ['top', 'side'],
             'options' => ['class' => 'wb-menu__item'],
             'items' => [
+                ['label' => 'Пользователи', 'url' => ['/user/admin/index'], 'visible' => Yii::$app->user->can('manageUsers')],
+                ['label' => 'Роли', 'url' => ['/admin/assignment'], 'visible' => Yii::$app->user->can('admin')],
+                ['label' => 'Компании', 'url' => ['/company/index'], 'visible' => Yii::$app->user->can('manageCompanies')],
+                ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
                 ['label' => 'Настройки профиля', 'url' => ['/user/profile']],
             ],
         ],    
@@ -247,7 +252,7 @@ if (!Yii::$app->user->isGuest) {
                 'label' => '<span class="wb-icon">' . self::getIcon('company') . '</span><span class="wb-text">' . Html::encode($headerLabel) . '</span>',
                 'items' => $companySubItems,
                 'visibleIn' => ['top'],
-                'options' => ['class' => 'wb-menu__item dropdown nav-item navbar__company-selector'],
+                'options' => ['class' => 'wb-menu__item dropdown nav-item navbar__company-selector  ms-auto'],
                 'skip_icon_map' => true,
             ];
         }
