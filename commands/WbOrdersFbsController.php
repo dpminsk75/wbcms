@@ -4,7 +4,12 @@ namespace app\commands;
 use yii\console\Controller;
 use yii\console\ExitCode;
 use yii\helpers\Console;
+use yii\db\Query;
+use yii\db\Expression;
 use Yii;
+use app\models\WbCardSize;
+use app\models\WbVirtualStock;
+use app\models\WbFbsWarehouse;
 
 /**
  * Синхронизация FBS-заказов (сборочных заданий) и их статусов.
@@ -146,7 +151,8 @@ class WbOrdersFbsController extends Controller
                 foreach ($orders as $order) {
                     $row = $this->prepareFbsOrderRow($order, $companyId);
                     try {
-                        $db->createCommand()->upsert('wb_orders_fbs', $row, true)->execute();
+                        // is_deducted/deducted_at не в $row -> сохраняется флаг дедупликации
+                        $db->createCommand()->upsert('wb_orders_fbs', $row, $row)->execute();
                         $totalProcessed++;
                     } catch (\Throwable $e) {
                         $orderIdForLog = $order['id'] ?? 'unknown';
@@ -164,6 +170,16 @@ class WbOrdersFbsController extends Controller
             }
 
             $this->stdout("Обработано сборочных заданий: {$totalProcessed}\n", Console::FG_GREEN);
+        }
+
+        // Авто-вычет из виртуал. остатков для складов с consider_orders=1
+        foreach ($companies as $company) {
+            try {
+                $this->deductVirtualStocks((int)$company['id']);
+            } catch (\Throwable $e) {
+                $this->stderr("Ошибка вычета виртуал. остатков {$company['name']}: {$e->getMessage()}\n", Console::FG_RED);
+                $this->logDeduct($company['id'], "ERROR deduct: {$e->getMessage()}");
+            }
         }
 
         return ExitCode::OK;
@@ -453,6 +469,150 @@ class WbOrdersFbsController extends Controller
             ];
         }
         return $result;
+    }
+
+    /**
+     * Вычитает заказы с consider_orders складов из wb_virtual_stock один раз (флаг is_deducted) и выгружает изменившиеся остатки на все виртуал. склады.
+     */
+    private function deductVirtualStocks(int $companyId): void
+    {
+        $db = Yii::$app->db;
+        $company = (new Query())->from('companies')->where(['id' => $companyId])->one($db);
+        if (!$company || empty($company['fbs_deduct_enabled'])) {
+            $this->logDeduct($companyId, "skip: fbs_deduct_enabled=0");
+            return;
+        }
+        $isTest = !empty($company['fbs_deduct_test']);
+        if ($isTest) {
+            $this->logDeduct($companyId, "TEST MODE fbs_deduct_test=1: БД обновится, PUT только в лог");
+        }
+        $whIds = (new Query())->select('warehouseId')->from('wb_fbs_warehouse')
+            ->where(['company_id' => $companyId, 'consider_orders' => 1, 'is_deleting' => 0])->column($db);
+        if (empty($whIds)) {
+            $this->logDeduct($companyId, "skip: нет складов с consider_orders=1");
+            return;
+        }
+        $orders = (new Query())->select(['wb_order_id','chrt_id'])->from('wb_orders_fbs')
+            ->where(['company_id' => $companyId, 'is_deducted' => 0])->andWhere(['in','warehouse_id',$whIds])->all($db);
+        if (empty($orders)) {
+            $this->logDeduct($companyId, "skip: нет новых заказов для вычета");
+            return;
+        }
+        $cntByChrt = array_count_values(array_filter(array_column($orders,'chrt_id')));
+        if (empty($cntByChrt)) {
+            $this->logDeduct($companyId, "skip: у заказов пустой chrt_id");
+            return;
+        }
+        $this->stdout("  [deduct] заказов ".count($orders)." chrt ".count($cntByChrt)." для вычета\n", Console::FG_YELLOW);
+        $this->logDeduct($companyId, "start: ".count($orders)." заказов, ".count($cntByChrt)." chrt");
+
+        $changedSkus = [];
+        $deductDetails = [];
+        foreach ($cntByChrt as $chrtId => $cnt) {
+            $size = WbCardSize::findOne(['chrtID' => (int)$chrtId]);
+            if (!$size) {
+                $this->logDeduct($companyId, "  chrt $chrtId: sku не найден, пропуск");
+                continue;
+            }
+            $sku = $size->sku;
+            $stock = WbVirtualStock::findOne(['company_id'=>$companyId,'sku'=>$sku]);
+            $oldQty = $stock ? (int)$stock->quantity : 0;
+            $newQty = max(0, $oldQty - (int)$cnt);
+            if ($stock) {
+                $db->createCommand()->update('wb_virtual_stock', ['quantity'=>$newQty], ['company_id'=>$companyId,'sku'=>$sku])->execute();
+            } else {
+                $newQty = 0;
+                $db->createCommand()->insert('wb_virtual_stock', ['company_id'=>$companyId,'sku'=>$sku,'nmID'=>$size->nmID,'chrtID'=>$size->chrtID,'quantity'=>0])->execute();
+            }
+            if ($oldQty !== $newQty) {
+                $changedSkus[] = $sku;
+                $deductDetails[] = "$sku (chrt $chrtId): $oldQty -> $newQty (-$cnt)";
+            }
+            $this->logDeduct($companyId, "  chrt $chrtId sku $sku: $oldQty -> $newQty (-$cnt)");
+        }
+
+        // помечаем заказы как вычтенные (даже в TEST — чтобы не вычитать дважды)
+        $ids = array_column($orders,'wb_order_id');
+        $db->createCommand()->update('wb_orders_fbs', ['is_deducted'=>1,'deducted_at'=>new Expression('NOW()')], ['in','wb_order_id',$ids])->execute();
+        $this->logDeduct($companyId, "marked ".count($ids)." orders is_deducted=1");
+
+        if (empty($changedSkus)) {
+            $this->logDeduct($companyId, "no changed skus, upload skipped");
+            return;
+        }
+
+        $this->logDeduct($companyId, "changed: ".implode(', ',$deductDetails));
+        $this->uploadChangedVirtualStocks($companyId, $changedSkus);
+    }
+
+    private function uploadChangedVirtualStocks(int $companyId, array $skus): void
+    {
+        $db = Yii::$app->db;
+        $company = (new Query())->from('companies')->where(['id'=>$companyId])->one($db);
+        $token = $company['api_key'] ?? null;
+        if (!$token) {
+            $this->logDeduct($companyId, "upload skip: нет токена");
+            return;
+        }
+        $warehouses = WbFbsWarehouse::find()->where(['company_id'=>$companyId,'is_virtual'=>1])->all();
+        if (empty($warehouses)) {
+            $this->logDeduct($companyId, "upload skip: нет виртуал. складов");
+            return;
+        }
+        $isTest = !empty($company['fbs_deduct_test']);
+        if ($isTest) {
+            $this->logDeduct($companyId, "TEST MODE: реальные PUT на WB пропущены (fbs_deduct_test=1)");
+            $this->stdout("  [deduct] TEST MODE - только лог, без PUT\n", Console::FG_YELLOW);
+        }
+        $stocks = WbVirtualStock::find()->where(['company_id'=>$companyId])->andWhere(['in','sku',$skus])->all();
+        $payloadStocks = [];
+        foreach ($stocks as $s) {
+            $payloadStocks[] = ['chrtId'=>(int)$s->chrtID, 'amount'=>(int)$s->quantity];
+        }
+        // также sku которых не было в wb_virtual_stock но попали в changed (нулевой остаток уже создан)
+        foreach ($warehouses as $wh) {
+            $chunks = array_chunk($payloadStocks, 1000);
+            foreach ($chunks as $idx=>$chunk) {
+                $payload = ['stocks'=>$chunk];
+                $url = "https://marketplace-api.wildberries.ru/api/v3/stocks/{$wh->warehouseId}";
+                $prefix = $isTest ? "[DRY] " : "";
+                $this->logDeduct($companyId, $prefix."PUT $url chunk ".($idx+1)."/".count($chunks)." ".json_encode($payload, JSON_UNESCAPED_UNICODE));
+                if ($isTest) {
+                    continue;
+                }
+                try {
+                    $resp = Yii::$app->wbHttpClient->request('PUT', $url, $payload, $token, $companyId, null, true);
+                    $ok = $resp->isOk;
+                    $this->logDeduct($companyId, "  -> HTTP {$resp->statusCode} ok=".($ok?'1':'0')." ".substr($resp->content??'',0,300));
+                    if ($ok) {
+                        foreach ($chunk as $ps) {
+                            $size = WbCardSize::findOne(['chrtID'=>$ps['chrtId']]);
+                            if (!$size) continue;
+                            $db->createCommand()->upsert('wb_fbs_stock', [
+                                'company_id'=>$companyId,'warehouseId'=>$wh->warehouseId,'sku'=>$size->sku,'amount'=>$ps['amount'],'nmID'=>$size->nmID,'chrtID'=>$size->chrtID,
+                            ], ['amount'=>$ps['amount']])->execute();
+                        }
+                    }
+                    usleep(300000);
+                } catch (\Throwable $e) {
+                    $this->logDeduct($companyId, "  -> ERROR ".$e->getMessage());
+                }
+            }
+        }
+        $this->logDeduct($companyId, "upload done warehouses=".count($warehouses)." skus=".count($skus));
+    }
+
+    private function logDeduct(int $companyId, string $msg): void
+    {
+        $line = date('Y-m-d H:i:s')." [c$companyId] $msg\n";
+        $dir = Yii::$app->params['wbFbsDeductLogDir'] ?? Yii::getAlias('@runtime/logs');
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+            if (!is_dir($dir)) $dir = Yii::getAlias('@runtime/logs');
+        }
+        $file = $dir . '/wb-fbs-deduct-'.date('Y-m-d').'.log';
+        @file_put_contents($file, $line, FILE_APPEND);
+        Yii::info($msg, 'wb_fbs_deduct');
     }
 
     /**

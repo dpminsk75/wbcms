@@ -74,7 +74,7 @@ class WbOrdersController extends Controller
             $this->stdout("Успешно обработано строк для {$companyName}: {$count}" .
                 ($errors ? " (ошибок: {$errors})" : "") . "\n", $errors ? Console::FG_YELLOW : Console::FG_GREEN);
 
-            sleep(1);
+            usleep(200000);
         }
 
         return $totalErrors > 0 ? ExitCode::UNSPECIFIED_ERROR : ExitCode::OK;
@@ -166,7 +166,7 @@ class WbOrdersController extends Controller
             $this->stdout("Успешно обработано строк (order-feed) для {$companyName}: {$count}" .
                 ($errors ? " (ошибок: {$errors})" : "") . "\n", $errors ? Console::FG_YELLOW : Console::FG_GREEN);
 
-            sleep(1);
+            usleep(200000);
         }
 
         return $totalErrors > 0 ? ExitCode::UNSPECIFIED_ERROR : ExitCode::OK;
@@ -343,7 +343,7 @@ class WbOrdersController extends Controller
                 break;
             }
 
-            sleep(1); // бережём лимит запросов API между страницами
+            usleep(200000); // бережём лимит запросов API между страницами
         } while (true);
 
         return ['orders' => $allOrders, 'snapshotTime' => $snapshotTime, 'pages' => $page];
