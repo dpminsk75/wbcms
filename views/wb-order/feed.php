@@ -275,10 +275,15 @@ $columns = [
         'contentOptions' => ['class' => 'mobile-hide-col', 'style' => 'width:100px;'],
         'value' => function ($row) {
             $name = Html::encode($row['warehouse_name'] ?? '—');
-            $subParts = array_filter([$row['warehouse_type'] ?? null]); //$row['oblast_okrug_name'] ?? null,
+            $subParts = array_filter([$row['warehouse_type'] ?? null]);
             $sub = Html::encode(implode(' • ', $subParts));
-            return '<div style="font-weight:600;">' . $name . '</div>'
+            $out = '<div style="font-weight:600;">' . $name . '</div>'
                 . '<div style="font-size:11px; color:#888;">' . $sub . '</div>';
+            if (!empty($row['fbs_warehouse_name']) && ($row['warehouse_type'] ?? null) === 'Склад продавца') {
+                $fbs = Html::encode($row['fbs_warehouse_name']);
+                $out .= '<div style="font-size:11px; color:#0d6efd;">' . $fbs . '</div>';
+            }
+            return $out;
         },
     ],
     [

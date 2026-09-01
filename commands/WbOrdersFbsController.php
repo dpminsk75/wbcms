@@ -7,6 +7,7 @@ use yii\helpers\Console;
 use yii\db\Query;
 use yii\db\Expression;
 use Yii;
+use app\models\WbCard;
 use app\models\WbCardSize;
 use app\models\WbVirtualStock;
 use app\models\WbFbsWarehouse;
@@ -492,7 +493,7 @@ class WbOrdersFbsController extends Controller
             $this->logDeduct($companyId, "skip: нет складов с consider_orders=1");
             return;
         }
-        $orders = (new Query())->select(['wb_order_id','chrt_id'])->from('wb_orders_fbs')
+        $orders = (new Query())->select(['wb_order_id','chrt_id','warehouse_id'])->from('wb_orders_fbs')
             ->where(['company_id' => $companyId, 'is_deducted' => 0])->andWhere(['in','warehouse_id',$whIds])->all($db);
         if (empty($orders)) {
             $this->logDeduct($companyId, "skip: нет новых заказов для вычета");
@@ -503,8 +504,15 @@ class WbOrdersFbsController extends Controller
             $this->logDeduct($companyId, "skip: у заказов пустой chrt_id");
             return;
         }
+        // разбивка по складам для удобства
+        $cntByWh = array_count_values(array_filter(array_column($orders,'warehouse_id')));
+        $whNames = (new Query())->select(['warehouseId','name'])->from('wb_fbs_warehouse')->where(['in','warehouseId', array_keys($cntByWh)])->indexBy('warehouseId')->all($db);
+        $whParts = [];
+        foreach ($cntByWh as $whId => $cnt) {
+            $whParts[] = "$whId (" . ($whNames[$whId]['name'] ?? '?') . "): $cnt";
+        }
         $this->stdout("  [deduct] заказов ".count($orders)." chrt ".count($cntByChrt)." для вычета\n", Console::FG_YELLOW);
-        $this->logDeduct($companyId, "start: ".count($orders)." заказов, ".count($cntByChrt)." chrt");
+        $this->logDeduct($companyId, "start: ".count($orders)." заказов, ".count($cntByChrt)." chrt | по складам: ".implode(', ', $whParts));
 
         $changedSkus = [];
         $deductDetails = [];
@@ -515,6 +523,11 @@ class WbOrdersFbsController extends Controller
                 continue;
             }
             $sku = $size->sku;
+            $card = WbCard::findOne(['nmID'=>$size->nmID]);
+            $vendorCode = $card ? $card->vendorCode : '-';
+            $nmID = $size->nmID;
+            $whsForChrt = array_unique(array_column(array_filter($orders, fn($o)=>(int)($o['chrt_id']??0)===(int)$chrtId), 'warehouse_id'));
+            $whsStr = $whsForChrt ? implode(',', $whsForChrt) : '-';
             $stock = WbVirtualStock::findOne(['company_id'=>$companyId,'sku'=>$sku]);
             $oldQty = $stock ? (int)$stock->quantity : 0;
             $newQty = max(0, $oldQty - (int)$cnt);
@@ -528,7 +541,7 @@ class WbOrdersFbsController extends Controller
                 $changedSkus[] = $sku;
                 $deductDetails[] = "$sku (chrt $chrtId): $oldQty -> $newQty (-$cnt)";
             }
-            $this->logDeduct($companyId, "  chrt $chrtId sku $sku: $oldQty -> $newQty (-$cnt)");
+            $this->logDeduct($companyId, "  chrt $chrtId sku $sku vendorCode $vendorCode nmID $nmID wh [$whsStr]: $oldQty -> $newQty (-$cnt)");
         }
 
         // помечаем заказы как вычтенные (даже в TEST — чтобы не вычитать дважды)

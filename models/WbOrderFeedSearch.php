@@ -250,6 +250,9 @@ class WbOrderFeedSearch extends WbOrder
                 'c.brand AS card_brand',
                 'c.photos AS card_photos',
                 'f.supply_id AS fbs_supply_id',
+                'f.warehouse_id AS fbs_warehouse_id',
+                'wh.name AS fbs_warehouse_name',
+                'wh.address AS fbs_warehouse_address',
                 'ls.supplier_status AS fbs_supplier_status',
                 'ls.wb_status AS fbs_wb_status',
                 'ls.status_changed_at AS fbs_status_changed_at',
@@ -258,6 +261,7 @@ class WbOrderFeedSearch extends WbOrder
                 'fcst.forecast_acquiring_pct',
             ])
             ->leftJoin(['c' => 'wbcards'], 'c.nmID = o.nm_id')
+            ->leftJoin(['wh' => 'wb_fbs_warehouse'], 'wh.warehouseId = f.warehouse_id AND wh.company_id = o.company_id')
             // Прогнозные показатели (detail_by_period_forecast) — средние по
             // сегменту (склад/тип + регион + категория) за последние 1-10
             // дней ДО СЕГОДНЯ (фиксированное окно, не per-order — без
