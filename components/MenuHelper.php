@@ -55,7 +55,7 @@ class MenuHelper
             'items' => [
                 ['label' => 'ТОП продаж', 'url' => ['/wb-sales-analysis/']],
                 ['label' => 'Карточка WB', 'url' => ['/wb/detail/']],
-                ['label' => 'Динамика заказов', 'url' => ['/agg-orders-report/compare']],
+                ['label' => 'Заказы', 'url' => ['/wb-order/feed-aggregated']],
                 ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
                 ['label' => 'Реклама', 'url' => ['/wb-adv-report/']],
                 ['label' => 'По ГЕО', 'url' => ['/geo-map-report/index?nm_id=526443466']],

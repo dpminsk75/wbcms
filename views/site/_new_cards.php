@@ -31,8 +31,9 @@ if (empty($newCards)) {
 ?>
 
 <div class="card mb-4 expandable-container" style="border: 1px solid var(--bs-border-color-translucent); border-radius: 8px; overflow: hidden;">
-    <div class="card-header text-white" style="font-size: 13px; font-weight: bold; background-color: #4b4b4b; padding: 10px 15px;">
-        Новые карточки за последние 14 дней (<?= count($newCards) ?>)
+    <div class="card-header text-white d-flex justify-content-between align-items-center" style="font-size: 13px; font-weight: bold; background-color: #4b4b4b; padding: 10px 15px;">
+        <a href="<?= \yii\helpers\Url::to(['site/new-cards']) ?>" class="text-white" style="text-decoration: none;" title="Открыть все новые карточки с фильтрами">Новые карточки за последние 14 дней (<?= count($newCards) ?>)</a>
+        <a href="<?= \yii\helpers\Url::to(['site/new-cards']) ?>" class="btn btn-sm btn-light py-0 px-2" style="font-size:11px; font-weight:600; text-decoration:none;">Все карточки →</a>
     </div>
     <div class="card-body p-3 bg-light"> 
         <div class="row g-3"> 

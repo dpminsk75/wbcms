@@ -6,6 +6,7 @@ use Yii;
 use app\models\WbOrder;
 use app\models\WbOrderSearch;
 use app\models\WbOrderFeedSearch;
+use app\models\WbOrderFeedAggregatedSearch;
 use app\models\DPFilterForm;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
@@ -90,6 +91,39 @@ class WbOrderController extends Controller
             'filterModel' => $filterModel,
             'searchModel' => $searchModel,
             'dataProvider' => $dataProvider,
+        ]);
+    }
+
+    public function actionFeedAggregated()
+    {
+        $filterModel = new DPFilterForm();
+        $filterModel->load(Yii::$app->request->get());
+
+        if (!$filterModel->date_from) {
+            $filterModel->date_from = date('Y-m-d', strtotime('-6 days'));
+        }
+        if (!$filterModel->date_to) {
+            $filterModel->date_to = date('Y-m-d');
+        }
+
+        $searchModel = new WbOrderFeedAggregatedSearch();
+        $searchModel->load(Yii::$app->request->queryParams);
+        $dataProvider = $searchModel->search([
+            'nm_id' => $filterModel->nm_id,
+            'date_from' => $filterModel->date_from,
+            'date_to' => $filterModel->date_to,
+        ]);
+
+        // данные для воронки над таблицей (график + цифры) — отдельный блок
+        $funnelStats = $searchModel->getFunnelStats();
+        $chartData = $searchModel->getDailyStatusChartData();
+
+        return $this->render('feed-aggregated', [
+            'filterModel' => $filterModel,
+            'searchModel' => $searchModel,
+            'dataProvider' => $dataProvider,
+            'funnelStats' => $funnelStats,
+            'chartData' => $chartData,
         ]);
     }
 

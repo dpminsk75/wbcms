@@ -626,6 +626,21 @@ echo GridView::widget([
                     'target' => '_blank',
                     'data-pjax' => '0',
                 ]
+            ) . ' ' . Html::a(
+                '<i class="bi bi-graph-up me-1" style="transform: none;"></i> Топ',
+                Url::to([
+                    '/wb-order/feed-aggregated',
+                    'DPFilterForm' => [
+                        'date_from' => $dateFrom,
+                        'date_to'   => date('Y-m-d'),
+                    ],
+                ]),
+                [
+                    'class' => 'text-white ms-2', // Маленький отступ слева
+                    'style' => 'text-decoration: underline; font-weight: 500;',
+                    'target' => '_blank',
+                    'data-pjax' => '0',
+                ]
             ),
 
             'headingOptions' => ['class' => 'card-header text-white bg-wb'],

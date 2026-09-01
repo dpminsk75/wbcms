@@ -845,6 +845,96 @@ protected function queryPeriodAgg($table, $sumField, $dateFrom, $dateTo)
 
 
 
+    /**
+     * Отдельная страница «Новые карточки» — тот же вид что в _new_cards,
+     * но с фильтрами: период (с/по), поиск по части названия, сортировка.
+     */
+    public function actionNewCards()
+    {
+        $request = Yii::$app->request;
+
+        $dateFrom = $request->get('dateFrom', date('Y-m-d', strtotime('-14 days')));
+        $dateTo   = $request->get('dateTo', date('Y-m-d'));
+        $titleFilter = trim((string) $request->get('title', ''));
+        $sort = $request->get('sort', 'created_desc');
+
+        // валидация дат
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+            $dateFrom = date('Y-m-d', strtotime('-14 days'));
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+            $dateTo = date('Y-m-d');
+        }
+
+        $allowedSorts = ['created_desc', 'created_asc', 'nmid_asc', 'nmid_desc', 'title_asc', 'title_desc'];
+        if (!in_array($sort, $allowedSorts, true)) {
+            $sort = 'created_desc';
+        }
+
+        $dateFromSql = $dateFrom . ' 00:00:00';
+        $dateToSql   = $dateTo . ' 23:59:59';
+
+        $query = (new \yii\db\Query())
+            ->select(['nmID', 'vendorCode', 'title', 'brand', 'photos', 'created_at'])
+            ->from('wbcards')
+            ->where(['between', 'created_at', $dateFromSql, $dateToSql]);
+
+        if ($titleFilter !== '') {
+            $query->andWhere(['like', 'title', $titleFilter]);
+        }
+
+        // сортировка
+        switch ($sort) {
+            case 'created_asc':
+                $query->orderBy(['created_at' => SORT_ASC]);
+                break;
+            case 'nmid_asc':
+                $query->orderBy(['nmID' => SORT_ASC]);
+                break;
+            case 'nmid_desc':
+                $query->orderBy(['nmID' => SORT_DESC]);
+                break;
+            case 'title_asc':
+                $query->orderBy(['title' => SORT_ASC]);
+                break;
+            case 'title_desc':
+                $query->orderBy(['title' => SORT_DESC]);
+                break;
+            case 'created_desc':
+            default:
+                // как в оригинале: приоритет по символу vendorCode + дата DESC
+                $query->orderBy([
+                    new Expression("
+                        CASE 
+                            WHEN vendorCode LIKE '!%' THEN 1
+                            WHEN vendorCode LIKE '\$%' THEN 2
+                            WHEN vendorCode LIKE '#%' THEN 3
+                            ELSE 4
+                        END ASC
+                    "),
+                    'created_at' => SORT_DESC,
+                ]);
+                break;
+        }
+
+        // при сортировке по nmID/title вторым ключом добавляем дату для стабильности
+        if (in_array($sort, ['nmid_asc', 'nmid_desc', 'title_asc', 'title_desc'], true)) {
+            // уже отсортировано выше, но если есть дубли — добавим created_at DESC как втор. ключ через addOrderBy
+            // переопределяем полностью: для Yii Query orderBy уже задан, добавим второй
+            $query->addOrderBy(['created_at' => SORT_DESC]);
+        }
+
+        $newCards = $query->all();
+
+        return $this->render('new_cards', [
+            'newCards'    => $newCards,
+            'dateFrom'    => $dateFrom,
+            'dateTo'      => $dateTo,
+            'titleFilter' => $titleFilter,
+            'sort'        => $sort,
+        ]);
+    }
+
     public function actionSelectCompany($id)
     {
         // Проверяем, существует ли такая компания и принадлежит ли она пользователю,
