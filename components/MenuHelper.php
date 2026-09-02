@@ -56,6 +56,8 @@ class MenuHelper
                 ['label' => 'ТОП продаж', 'url' => ['/wb-sales-analysis/']],
                 ['label' => 'Карточка WB', 'url' => ['/wb/detail/']],
                 ['label' => 'Заказы', 'url' => ['/wb-order/feed-aggregated']],
+                ['label' => 'Тепловая карта', 'url' => ['/wb-order/heatmap']],
+
                 ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
                 ['label' => 'Реклама', 'url' => ['/wb-adv-report/']],
                 ['label' => 'По ГЕО', 'url' => ['/geo-map-report/index?nm_id=526443466']],
