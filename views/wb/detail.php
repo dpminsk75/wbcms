@@ -73,7 +73,7 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
 <?php if ($stocksProvider): ?> 
     <div class="row custom-compact-grid">
     <div class="col-md-6">
-        <div class="grid_wbstat grid_no_kv-panel-before expandable-container">
+        <div class="grid_wbstat grid_no_kv-panel-before"> <?php /*expandable-container*/?>
             <?php echo GridView::widget([
                 'dataProvider' => $stocksProvider,
 
@@ -91,7 +91,7 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
 
                 'layout' => "{summary}\n{items}",
                 'showFooter' => false,
-                'panel' => false,
+//                'panel' => false,
 
                 'summary' => false, // Отключаем текст "Showing 1-X of Y"
                 'columns' => [
@@ -116,17 +116,20 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
                     'headingOptions' => ['class' => 'card-header text-white bg-wb'],
                     'heading' => 'На складах',
                     'footer' => false, // отключает card-footer 
+                    'after' => false,
                 ],
             ]);
             ?>
         </div>
+<?php /*
         <div class="expand-btn-wrapper" style="margin-bottom: 5px;">
             <button class="btn btn-outline-primary btn-sm btn-toggle-expand">Увидеть больше</button>
         </div>
+*/?>
     </div>
 
     <div class="col-md-6">
-        <div class="grid_wbstat grid_no_kv-panel-before expandable-container">
+        <div class="grid_wbstat grid_no_kv-panel-before"> <?php /* expandable-container */ ?>
             <?php echo GridView::widget([
                 'dataProvider' => $inWayProvider,
 
@@ -142,7 +145,7 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
                 'showPageSummary' => true,
                 'pageSummaryPosition' => GridView::POS_TOP, 
                 'showFooter' => false,
-                'panel' => false,
+//                'panel' => false,
 
                 'showPageSummary' => true,
                 'summary' => false,
@@ -172,16 +175,117 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
                     'headingOptions' => ['class' => 'card-header text-white bg-wb'],
                     'heading' => 'В пути',
                     'footer' => false, // отключает card-footer 
+                    'after' => false,
                 ],
             ]);
             ?>               
         </div>
+<?php /*
         <div class="expand-btn-wrapper" style="margin-bottom: 5px;">
             <button class="btn btn-outline-primary btn-sm btn-toggle-expand">Увидеть больше</button>
         </div>
+*/?>
     </div>
     </div>
 <?php endif; ?>
+
+            <?php /* Платное хранение — агрегат по calcType за период */ ?>
+            <?php if (isset($paidStorageProvider) && $paidStorageProvider->totalCount > 0): ?>
+                <div class="grid_wbstat grid_no_kv-panel-before expandable-container paid-storage" style="margin-top: 10px;">
+                    <?php echo GridView::widget([
+                        'dataProvider' => $paidStorageProvider,
+                        'containerOptions' => ['class' => 'custom-compact-grid'],
+                        'export' => false,
+                        'toggleData' => false,
+                        'pjax' => false,
+                        'bordered' => true,
+                        'striped' => true,
+                        'condensed' => true,
+                        'responsive' => true,
+                        'hover' => true,
+                        'showPageSummary' => true,
+                        'pageSummaryPosition' => GridView::POS_TOP,
+                        'layout' => "{items}",
+                        'showFooter' => false,
+                        'summary' => false,
+                        'panel' => [
+                            'type' => GridView::TYPE_PRIMARY,
+                            'headingOptions' => ['class' => 'card-header text-white bg-wb'],
+                            'heading' => 'Платное хранение за период (' . Html::encode(date('d.m.Y', strtotime($date_from)) . ' — ' . date('d.m.Y', strtotime($date_to))) . ')',
+                            'footer' => false,
+                            'after' => false,
+                        ],
+                        'columns' => [
+                            [
+                                'attribute' => 'calcType',
+                                'label' => 'Тип расчёта',
+                                'headerOptions' => ['style' => 'text-align: left; min-width: 240px;'],
+                                'contentOptions' => ['style' => 'text-align: left; font-size: 12px; white-space: nowrap;'],
+                            ],
+                            [
+                                'attribute' => 'days_cnt',
+                                'label' => 'Дней',
+                                'format' => ['decimal', 0],
+                                'hAlign' => 'right',
+                                'headerOptions' => ['style' => 'text-align: center; width: 60px;'],
+                                'contentOptions' => ['class' => 'text-right'],
+                                'pageSummary' => false,
+                            ],
+                            [
+                                'attribute' => 'total_units',
+                                'label' => 'Ед. × дни',
+                                'format' => ['decimal', 0],
+                                'hAlign' => 'right',
+                                'headerOptions' => ['style' => 'text-align: center; width: 90px;'],
+                                'contentOptions' => ['class' => 'text-right'],
+                                'pageSummary' => true,
+                                'pageSummaryOptions' => ['class' => 'text-right fw-bold'],
+                            ],
+                            [
+                                'attribute' => 'avg_volume',
+                                'label' => 'Объём',
+                                'format' => ['decimal', 2],
+                                'hAlign' => 'right',
+                                'headerOptions' => ['style' => 'text-align: center; width: 70px;'],
+                                'contentOptions' => ['class' => 'text-right', 'style' => 'color: #5d6d7e;'],
+                                'value' => function($model) { $v = $model['avg_volume'] ?? null; return $v !== null && (float)$v > 0 ? $v : null; },
+                            ],
+                            [
+                                'attribute' => 'total_price',
+                                'label' => 'Сумма ₽',
+                                'format' => ['decimal', 2],
+                                'hAlign' => 'right',
+                                'headerOptions' => ['style' => 'text-align: center; width: 110px;'],
+                                'contentOptions' => function($model) {
+                                    $isNeg = ($model['total_price'] ?? 0) < 0;
+                                    return ['class' => 'text-right ', 'style' => $isNeg ? 'color: #c0392b;' : 'color: #2c3e50;'];
+                                },
+                                'pageSummary' => true,
+                                'pageSummaryOptions' => ['class' => 'text-right fw-bold', 'style' => 'color: #2c3e50; background: #f8f9fa;'],
+                            ],
+                            [
+                                'attribute' => 'price_per_unit',
+                                'label' => '₽/ед.',
+                                'hAlign' => 'right',
+                                'format' => 'raw',
+                                'headerOptions' => ['style' => 'text-align: center; width: 80px;'],
+                                'contentOptions' => ['class' => 'text-right', 'style' => 'color: #7f8c8d; font-style: italic;'],
+                                'value' => function($model) {
+                                    if ($model['price_per_unit'] === null || $model['total_units'] == 0) return '<span style="color:#bbb;">—</span>';
+                                    return number_format((float)$model['price_per_unit'], 2, ',', ' ');
+                                },
+                            ],
+                        ],
+                    ]); ?>
+                </div>
+            <div class="expand-btn-wrapper" style="margin-bottom: 5px;">
+                <button class="btn btn-outline-primary btn-sm btn-toggle-expand">Увидеть больше</button>
+            </div>
+            <?php else: ?>
+                <?php if ($card): ?>
+                <div class="alert alert-light border" style="margin-top: 10px; font-size: 12px;">Нет данных о платном хранении за период.</div>
+                <?php endif; ?>
+            <?php endif; ?>
 
         </div>
         <div class="col-md-6">
@@ -225,7 +329,7 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
                         <?= $card->renderGallery(); ?>
                     </div>
                 </div>
-                <div class="row expandable-container">
+                <div class="row expandable-container card-descr">
                     <div class="card_characteristics col-md-6">
                         <?= $card->renderCharacteristics(); ?>
                     </div>
@@ -1026,6 +1130,12 @@ var legend = legendContainer.children.push(am5.Legend.new(YearLineRoot, {
     .grid_wbstat .table {  font-size: 12px; table-layout: fixed; width: 100%; overflow-x: auto; overflow-y: hidden; display: block; border-collapse: collapse;}
     .grid_wbstat .table td, .grid_wbstat .table th {  padding: 4px 4px !important; }
     .grid_wbstat .table th {text-align: center;}
+
+    .paid-storage.expandable-container { max-height: 150px; }
+    .paid-storage.expandable-container.is-expanded { max-height: 50000px;}
+    .card-descr.expandable-container { max-height: 450px; }
+    .card-descr.expandable-container.is-expanded { max-height: 50000px;}
+
 </style>
 
 

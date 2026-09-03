@@ -1,5 +1,5 @@
 <?php
-namespace app\controllers;
+namespace app\controllers; 
 
 use yii\helpers\Json;
 use yii\helpers\ArrayHelper;
@@ -299,10 +299,7 @@ class WbController extends Controller
         ];
 
         try {
-            // Выполняем UPSERT на уровне базы данных
-            // Первым аргументом идет имя таблицы (wbcards по вашей инструкции)
             Yii::$app->db->createCommand()->upsert('wbcards', $columns, [
-                // Список полей, которые нужно обновить, если nmID уже существует
                 'imtID'       => $columns['imtID'],
                 'nmUUID'      => $columns['nmUUID'],
                 'subjectID'   => $columns['subjectID'],
@@ -311,15 +308,20 @@ class WbController extends Controller
                 'brand'       => $columns['brand'],
                 'title'       => $columns['title'],
                 'description' => $columns['description'],
-                
                 'photos'      => $columns['photos'],
                 'video'       => $columns['video'],
-
                 'dimensions'       => $columns['dimensions'],
                 'characteristics'  => $columns['characteristics'],
                 'sizes'            => $columns['sizes'],
                 'tags'             => $columns['tags'],
             ])->execute();
+
+            // Гибрид: wb_card_size — развёртка wbcards.sizes для FBS остатков
+            try {
+                \app\models\WbCardSize::syncForCard((int)$card['nmID'], $card['sizes'] ?? null);
+            } catch (\Throwable $e) {
+                Yii::error("WbCardSize sync failed nmID {$card['nmID']}: " . $e->getMessage());
+            }
 
             return true;
         } catch (\Exception $e) {
@@ -623,6 +625,37 @@ class WbController extends Controller
             'pagination' => false,
         ]);
 
+        // Платное хранение: агрегат по calcType за выбранный период, для карточки nmId
+        $paidStorageProvider = new ArrayDataProvider(['allModels' => []]);
+        if (!empty($nmId)) {
+            try {
+                $paidStorageRows = (new Query())
+                    ->select([
+                        'calcType'      => 'COALESCE(calcType, "—")',
+                        'days_cnt'      => 'COUNT(DISTINCT `date`)',
+                        'rows_cnt'      => 'COUNT(*)',
+                        'total_units'   => 'SUM(barcodesCount)',
+                        'total_price'   => 'SUM(warehousePrice)',
+                        'avg_price'     => 'AVG(warehousePrice)',
+                        'price_per_unit'=> new Expression('SUM(warehousePrice) / NULLIF(SUM(barcodesCount),0)'),
+                        'avg_volume'    => 'AVG(COALESCE(volume,0))',
+                        'total_volume'  => new Expression('SUM(COALESCE(volume,0) * COALESCE(barcodesCount,0))'),
+                    ])
+                    ->from('wb_paid_storage')
+                    ->where(['nmId' => $nmId])
+                    ->andWhere(['between', 'date', date('Y-m-d', strtotime($date_from)), date('Y-m-d', strtotime($date_to))])
+                    ->groupBy(['calcType'])
+                    ->orderBy(['total_price' => SORT_DESC])
+                    ->all();
+                $paidStorageProvider = new ArrayDataProvider([
+                    'allModels' => $paidStorageRows,
+                    'pagination' => false,
+                ]);
+            } catch (\Throwable $e) {
+                Yii::error("paidStorage aggregate failed nmId $nmId: " . $e->getMessage());
+            }
+        }
+
 /*
             'cnt' => 'COUNT(quantity)',
             'sum_price' => 'SUM(retail_price)',
@@ -892,6 +925,7 @@ class WbController extends Controller
             'pivotDates' => $pivotDates,
             'ChartformattedData' => $ChartformattedData,
             'WeeklyFinanceProvider' => $WeeklyFinanceProvider,
+            'paidStorageProvider' => $paidStorageProvider,
 
             'phraseDataProvider' => $phraseDataProvider,
             'uniqueDates' => $uniqueDates,

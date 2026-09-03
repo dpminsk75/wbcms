@@ -161,17 +161,36 @@ class WbHttpClient extends Component
     private function getRetryAfter(Response $response, int $default): int
     {
         $headers = $response->getHeaders();
-        $retryAfter = $headers->get('Retry-After') ?? $headers->get('retry-after');
-        if ($retryAfter !== null) {
-            $retryAfter = is_array($retryAfter) ? reset($retryAfter) : $retryAfter;
-            if (is_numeric($retryAfter)) {
-                return max(1, (int)$retryAfter);
+        // WB для seller-analytics отдаёт лимит в X-RateLimit-Retry, а не в Retry-After
+        // Проверяем все варианты написания + fallback в тело ответа (detail)
+        $candidates = [
+            $headers->get('X-RateLimit-Retry'),
+            $headers->get('x-ratelimit-retry'),
+            $headers->get('X-Ratelimit-Retry'),
+            $headers->get('Retry-After'),
+            $headers->get('retry-after'),
+        ];
+        foreach ($candidates as $val) {
+            if ($val === null) continue;
+            $val = is_array($val) ? reset($val) : $val;
+            if (is_numeric($val)) {
+                return max(1, (int)$val);
             }
-            $ts = strtotime((string)$retryAfter);
+            $ts = strtotime((string)$val);
             if ($ts !== false) {
                 return max(1, $ts - time());
             }
         }
+        // Иногда WB кладёт retry в JSON тела: {"detail":"... retry after ..."}
+        try {
+            $data = $response->data ?? json_decode($response->content, true);
+            if (is_array($data)) {
+                $detail = $data['detail'] ?? '';
+                if (is_string($detail) && preg_match('/retry.*?(\d+)\s*s/i', $detail, $m)) {
+                    return max(1, (int)$m[1]);
+                }
+            }
+        } catch (\Throwable $ignored) {}
         return $default;
     }
 

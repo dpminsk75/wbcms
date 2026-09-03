@@ -21,8 +21,9 @@ class CronController extends Controller
             'wb/sync-cards',
             'wb-stock/sync',
             'wb-stock-offices/sync',
-            'wb-product-analytics/sync'
-            // 'другой-контроллер/экшен', // Добавляйте новые команды сюда
+            'wb-product-analytics/sync',
+            'wb-paid-storage/sync',
+            'wb-acceptance-report/sync',
         ];
 
         foreach ($commands as $route) {
