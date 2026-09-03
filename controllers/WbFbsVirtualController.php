@@ -6,6 +6,7 @@ use Yii;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\filters\VerbFilter;
+use yii\filters\AccessControl;
 use yii\data\ActiveDataProvider;
 use yii\db\Query;
 use yii\web\UploadedFile;
@@ -25,6 +26,12 @@ class WbFbsVirtualController extends Controller
     public function behaviors()
     {
         return [
+            'access' => [
+                'class' => AccessControl::class,
+                'rules' => [
+                    ['allow' => true, 'roles' => ['manageFbsStocks']],
+                ],
+            ],
             'verbs' => [
                 'class' => VerbFilter::class,
                 'actions' => [

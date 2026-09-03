@@ -112,7 +112,8 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
 
         'export' => [
             'showConfirmAlert' => false,
-            'target' => GridView::TARGET_BLANK
+            'target' => GridView::TARGET_BLANK,
+            'batchSize' => 1000,
         ],
         'exportConfig' => [
             GridView::EXCEL => ['label' => 'Сохранить в Excel'],
@@ -123,6 +124,7 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
                 'label'=>'Товар',
                 'format'=>'raw',
                 'contentOptions'=>['style'=>'min-width:240px'],
+                'hiddenFromExport'=>true,
                 'value'=>function($m){
                     $art = Html::encode($m['vendorCode'] ?? '—');
                     $nm = Html::encode($m['nmID'] ?? '');
@@ -138,6 +140,20 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
                     $sku = Html::encode($m['sku']);
                     return $sku.' <button type="button" class="copy-sku-btn" data-sku="'.$m['sku'].'" title="Копировать" style="background:transparent;border:none;padding:0 4px;color:#8a8a8a;cursor:pointer;line-height:1"><i class="far fa-copy" style="font-size:13px;color:#8a8a8a"></i></button>';
                 }
+            ],
+            [
+                'label'=>'Артикул продавца',
+                'attribute'=>'vendorCode',
+                'hidden'=>true,
+                'hiddenFromExport'=>false,
+                'value'=>function($m){ return $m['vendorCode'] ?? ''; },
+            ],
+            [
+                'label'=>'Наименование',
+                'attribute'=>'title',
+                'hidden'=>true,
+                'hiddenFromExport'=>false,
+                'value'=>function($m){ return $m['title'] ?? ''; },
             ],
             [
                 'label'=>'Остаток',
@@ -171,6 +187,7 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
                 'label'=>'Действия',
                 'format'=>'raw',
                 'contentOptions'=>['style'=>'text-align:center;white-space:nowrap;width:110px'],
+                'hiddenFromExport'=>true,
                 'value'=>function($m){
                     return Html::button('<i class="bi bi-cloud-upload"></i>', ['class'=>'btn btn-xs btn-gray upload-one-btn button-icon-20px', 'data-sku'=>$m['sku'], 'title'=>'Выгрузить на все виртуал.', 'style'=>'margin-right:4px'])
                          . Html::button('<i class="bi bi-trash"></i>', ['class'=>'btn btn-xs btn-gray delete-virtual-btn button-icon-15px', 'data-sku'=>$m['sku'], 'title'=>'Очистить/удалить']);
@@ -216,7 +233,7 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
   function updateDraftInfo(){
     var d=getDrafts(); var cnt=Object.keys(d).length;
     var el=document.getElementById('draft-info');
-    if(cnt){ el.style.display='block'; el.innerHTML='Несохранённых правок: '+cnt+' <button class="btn btn-xs btn-default" onclick="if(confirm(\'Очистить черновики?\')){localStorage.removeItem(DRAFT_KEY);location.reload();}">Очистить</button> <small class="text-muted">сохраняются при поиске/пагинации, уйдут после Выгрузить (автосохранение)</small>'; }
+    if(cnt){ el.style.display='block'; el.innerHTML='Несохранённых правок: '+cnt+' <button class="btn btn-xs btn-default" onclick="if(confirm(\'Очистить черновики?\')){localStorage.removeItem(\'wb_fbs_virtual_draft\');location.reload();}">Очистить</button> <small class="text-muted">сохраняются при поиске/пагинации, уйдут после Выгрузить (автосохранение)</small>'; }
     else el.style.display='none';
   }
   function restoreDrafts(){

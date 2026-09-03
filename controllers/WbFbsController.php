@@ -5,6 +5,7 @@ namespace app\controllers;
 use Yii;
 use yii\web\Controller;
 use yii\filters\VerbFilter;
+use yii\filters\AccessControl;
 
 /**
  * Web-обёртка для консольной команды wb-fbs/sync-warehouses
@@ -15,6 +16,12 @@ class WbFbsController extends Controller
     public function behaviors()
     {
         return [
+            'access' => [
+                'class' => AccessControl::class,
+                'rules' => [
+                    ['allow' => true, 'roles' => ['manageFbsStocks']],
+                ],
+            ],
             'verbs' => [
                 'class' => VerbFilter::class,
                 'actions' => [
