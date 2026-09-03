@@ -152,11 +152,20 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
                 'label'=>'Количество',
                 'format'=>'raw',
                 'contentOptions'=>['style'=>'text-align:center;background:#fff8e1;width:110px'],
+                'hiddenFromExport'=>true,
                 'value'=>function($m){
                     $v = $m['virtual_qty'] ?? '';
                     $val = $v === null ? '' : $v;
                     return '<input type="number" class="form-control input-sm virtual-qty" data-sku="'.$m['sku'].'" value="'.$val.'" style="width:80px;display:inline;text-align:center">';
                 }
+            ],
+            [
+                'label'=>'Количество',
+                'attribute'=>'virtual_qty',
+                'hidden'=>true,
+                'hiddenFromExport'=>false,
+                'hAlign'=>'right',
+                'value'=>function($m){ return $m['virtual_qty'] ?? ''; },
             ],
             [
                 'label'=>'Действия',
@@ -461,6 +470,21 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
       var t=document.createElement('textarea'); t.value=sku; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done();
     }
     console.log('[FBS] copy sku', sku);
+  });
+  // перед экспортом сохранить черновики, чтобы в Excel попали актуальные количества
+  document.addEventListener('click', function(ev){
+    var a=ev.target.closest('a');
+    if(!a || a.textContent.trim()!=='Сохранить в Excel') return;
+    var pending=collectVirtualChanges();
+    if(!pending.length) return;
+    ev.preventDefault();
+    var origText=a.textContent; a.textContent='Сохранение...'; a.style.pointerEvents='none';
+    post('<?= Url::to(['save-virtual']) ?>',{changes:JSON.stringify(pending)}, function(d){
+      a.textContent=origText; a.style.pointerEvents='';
+      if(d.success){ localStorage.removeItem(DRAFT_KEY); updateDraftInfo(); }
+      // повторный клик уже без pending
+      setTimeout(function(){ a.click(); }, 300);
+    });
   });
 })();
 </script>

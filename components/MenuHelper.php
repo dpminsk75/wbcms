@@ -31,6 +31,8 @@ class MenuHelper
 
             'logout'     => '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
             'user'       => '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+            'warehouse'  => '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+            'gear'       => '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 9 15a1.65 1.65 0 0 0-1-1.51V13a1.65 1.65 0 0 0 1-1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 15 15a1.65 1.65 0 0 0 1 1.51V17a2 2 0 0 1 4 0v-.09a1.65 1.65 0 0 0 1-1.51Z"/></svg>',
         ];
         return $icons[$name] ?? ''; 
     }
@@ -49,6 +51,7 @@ class MenuHelper
         [
             'label' => 'Отчеты',
             'icon' => 'reports',
+            'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin'),
             'visibleIn' => ['top', 'side'],
             'url' => ['#'],
             'options' => ['class' => 'wb-menu__item'],
@@ -79,6 +82,7 @@ class MenuHelper
         [
             'label' => 'По фразам',
             'icon' => 'by_search',
+            'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin'),
             'visibleIn' => ['top', 'side'],
             'url' => ['#'],
             'options' => ['class' => 'wb-menu__item'],
@@ -92,6 +96,7 @@ class MenuHelper
         [
             'label' => 'По тегам',
             'icon' => 'tag',
+            'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin'),
             'visibleIn' => ['top', 'side'],
             'url' => ['#'],
             'options' => ['class' => 'wb-menu__item'],
@@ -105,6 +110,7 @@ class MenuHelper
         [
             'label' => 'По товарам',
             'icon' => 'product',
+            'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin'),
             'visibleIn' => ['top', 'side'],
             'url' => ['#'],
             'options' => ['class' => 'wb-menu__item'],
@@ -116,6 +122,7 @@ class MenuHelper
         [
             'label' => 'Отзывы',
             'icon' => 'chat',
+            'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin'),
             'visibleIn' => ['top', 'side'],
             'url' => ['#'],
             'options' => ['class' => 'wb-menu__item'],
@@ -134,6 +141,7 @@ class MenuHelper
         [
             'label' => 'Данные',
             'icon' => 'data',
+            'visible' => Yii::$app->user->can('viewOrders') || Yii::$app->user->can('admin'),
             'visibleIn' => ['top', 'side'],
             'url' => ['#'],
             'options' => ['class' => 'wb-menu__item'],
@@ -146,10 +154,22 @@ class MenuHelper
                 ['label' => 'Себестоимость', 'url' => ['/cost-import/list']],
             ],
         ],    
+        [
+            'label' => 'Склад',
+            'icon' => 'warehouse',
+            'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin'),
+            'visibleIn' => ['top', 'side'],
+            'url' => ['#'],
+            'options' => ['class' => 'wb-menu__item'],
+            'items' => [
+                ['label' => 'Управление остатками', 'url' => ['/wb-fbs-virtual/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+            ],
+        ],
 
             [
                 'label' => 'Справочники',
                 'icon' => 'book',
+                'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin'),
                 'visibleIn' => ['top', 'side'],
                 'url' => ['#'],
                 'options' => ['class' => 'wb-menu__item'],
@@ -163,7 +183,7 @@ class MenuHelper
 
         [
             'label' => 'Админка',
-            'icon' => 'data',
+            'icon' => 'gear',
             'url' => ['#'],
             'visible' => Yii::$app->user->can('admin') || Yii::$app->user->can('manageUsers'),
             'visibleIn' => ['top', 'side'],

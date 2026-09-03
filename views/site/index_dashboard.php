@@ -13,6 +13,8 @@ Icon::map($this);
 
 $this->title = 'Управление товарами и карточками';
 
+$isFbsOnly = !Yii::$app->user->isGuest && Yii::$app->user->can('manageFbsStocks') && !Yii::$app->user->can('viewReports') && !Yii::$app->user->can('admin') && !Yii::$app->user->can('viewOrders');
+
 
     $dateFrom = $dateFrom ?: date('Y-m-d', strtotime('-3 days'));
     $dateTo = $dateTo ?: date('Y-m-d');
@@ -46,6 +48,7 @@ $this->registerJsFile('https://cdn.amcharts.com/lib/5/locales/ru_RU.js', [
         </div>
         <div class="dash_div col-md-10">
 
+<?php if (!$isFbsOnly): ?>
 <div class="mobile-hide-block">
 <?php 
 // Выводим блок с новыми карточками и виджет "Сегодня" только для администратора
@@ -62,6 +65,7 @@ if (!Yii::$app->user->isGuest && Yii::$app->user->identity->username === 'admin'
             ]) 
 ?>
 </div>
+<?php endif; ?>
 
 
 <?php
@@ -241,6 +245,7 @@ $columns = [
     ];
 ?>
 
+<?php if (!$isFbsOnly): ?>
 <div class="mobile-hide-block">
 <div class="row grid_advstat grid_wbstat grid_no_kv-panel-before grid_no_kv__summary_65 expandable-container">
 <?php
@@ -283,6 +288,7 @@ echo GridView::widget([
     <button class="btn btn-outline-primary btn-sm btn-toggle-expand">Увидеть больше</button>
 </div>
 </div>
+<?php endif; ?>
 
 
         <div class="mobile-hide-block">
@@ -372,6 +378,7 @@ echo GridView::widget([
         </div>
         </div>
 
+<?php if (!$isFbsOnly): ?>
 <?php
 //if (!Yii::$app->user->isGuest && Yii::$app->user->identity->username === 'admin') {
     echo $this->render('_today_stats_widget', ['todayStats' => $todayStats]);
@@ -826,6 +833,7 @@ echo GridView::widget([
     <?= $this->render('/wb-profit/_monthly_profit_grid', ['dataProvider' => $MonthlyFinanceProvider]) ?>
 </div>
 </div>
+<?php endif; ?>
 
 </div> 
 
