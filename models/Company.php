@@ -15,6 +15,15 @@ use yii\db\ActiveRecord;
  * @property string $updated_at
  * @property int $fbs_deduct_enabled
  * @property int $fbs_deduct_test
+ * @property string|null $seo_model
+ * @property int|null $seo_daily_limit
+ * @property int|null $seo_desc_min
+ * @property int|null $seo_desc_max
+ * @property int|null $seo_anti_spam_days
+ * @property string|null $seo_openrouter_key
+ * @property string|null $seo_openrouter_referer
+ * @property string|null $seo_openrouter_title
+ * @property string|null $seo_prompt
  */
 class Company extends ActiveRecord
 {
@@ -32,6 +41,12 @@ class Company extends ActiveRecord
             [['inn'], 'string', 'max' => 12],
             [['inn'], 'match', 'pattern' => '/^\d{10,12}$/', 'message' => 'ИНН 10 или 12 цифр', 'skipOnEmpty' => true],
             [['api_key'], 'string'],
+            [['seo_model'], 'string', 'max'=>120],
+            [['seo_openrouter_key'], 'string'],
+            [['seo_openrouter_referer','seo_openrouter_title'], 'string', 'max'=>255],
+            [['seo_prompt'], 'string'],
+            [['seo_daily_limit','seo_desc_min','seo_desc_max','seo_anti_spam_days'], 'integer', 'min'=>1, 'max'=>5000],
+            [['seo_daily_limit','seo_desc_min','seo_desc_max','seo_anti_spam_days'], 'default', 'value'=>null],
             [['is_active', 'fbs_deduct_enabled', 'fbs_deduct_test'], 'boolean'],
             [['is_active', 'fbs_deduct_enabled', 'fbs_deduct_test'], 'default', 'value' => 1],
         ];
@@ -48,6 +63,15 @@ class Company extends ActiveRecord
             'is_active' => 'Активна',
             'fbs_deduct_enabled' => 'Списание FBS',
             'fbs_deduct_test' => 'Тестовый режим FBS',
+            'seo_model' => 'SEO модель (OpenRouter)',
+            'seo_daily_limit' => 'SEO лимит/день',
+            'seo_desc_min' => 'SEO описание мин',
+            'seo_desc_max' => 'SEO описание макс',
+            'seo_anti_spam_days' => 'SEO анти-спам дней',
+            'seo_openrouter_key' => 'OpenRouter API key',
+            'seo_openrouter_referer' => 'OpenRouter Referer',
+            'seo_openrouter_title' => 'OpenRouter Title',
+            'seo_prompt' => 'SEO промпт (system)',
             'created_at' => 'Создана',
             'updated_at' => 'Обновлена',
         ];
