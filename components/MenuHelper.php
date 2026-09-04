@@ -82,7 +82,7 @@ class MenuHelper
         [
             'label' => 'По фразам',
             'icon' => 'by_search',
-            'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin'),
+            'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin') || Yii::$app->user->can('viewSeo'),
             'visibleIn' => ['top', 'side'],
             'url' => ['#'],
             'options' => ['class' => 'wb-menu__item'],
@@ -90,6 +90,9 @@ class MenuHelper
                 ['label' => 'Карточка -> фразы', 'url' => ['/wb-search/card']],
                 ['label' => 'Фраза -> карточки',  'url' => ['/wb-search/phrase']],
                 ['label' => 'Анализ фраз',        'url' => ['/wb-search/trend']],
+                ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
+                ['label' => 'SEO рекомендации', 'url' => ['/seo/index'], 'visible' => Yii::$app->user->can('viewSeo') || Yii::$app->user->can('admin')],
+                ['label' => 'SEO просмотренные', 'url' => ['/seo/index','status'=>'viewed'], 'visible' => Yii::$app->user->can('viewSeo') || Yii::$app->user->can('admin')],
             ],
         ],
 

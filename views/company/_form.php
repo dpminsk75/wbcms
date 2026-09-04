@@ -39,8 +39,8 @@ use yii\bootstrap5\Html;
                 <?= $form->field($model, 'seo_model')->textInput(['placeholder'=>'minimax/minimax-m3:free'])->hint('Команда: php yii seo/models — список :free') ?>
                 <div class="row">
                     <div class="col-4"><?= $form->field($model, 'seo_daily_limit')->textInput(['type'=>'number','placeholder'=>'20']) ?></div>
-                    <div class="col-4"><?= $form->field($model, 'seo_desc_min')->textInput(['type'=>'number','placeholder'=>'800']) ?></div>
-                    <div class="col-4"><?= $form->field($model, 'seo_desc_max')->textInput(['type'=>'number','placeholder'=>'1200']) ?></div>
+                    <div class="col-4"><?= $form->field($model, 'seo_desc_min')->textInput(['type'=>'number','placeholder'=>'2000']) ?></div>
+                    <div class="col-4"><?= $form->field($model, 'seo_desc_max')->textInput(['type'=>'number','placeholder'=>'5000']) ?></div>
                 </div>
                 <?= $form->field($model, 'seo_anti_spam_days')->textInput(['type'=>'number','placeholder'=>'14']) ?>
                 <?= $form->field($model, 'seo_prompt')->textarea(['rows'=>6, 'placeholder'=>'Пусто = дефолт: Ты — SEO-специалист Wildberries...']) 

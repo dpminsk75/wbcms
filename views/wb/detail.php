@@ -295,12 +295,18 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
                     <div class="panel-heading">Товар: <b><?= Html::encode($card->title) ?></b></div>
                     <div class="row" style=" margin-top: 5px; margin-bottom:15px">
                         <div class="panel-body font_11px grey card_characteristics col-md-6"> 
-                            <dl>
-                            <div class="dl_item"><dt class="card_characteristics__dt">Арт. WB:</dt><dd class="card_characteristics__dd"><a href="https://www.wildberries.ru/catalog/<?= Html::encode($card->nmID) ?>/detail.aspx?targetUrl=EX" target="_blank"><b><?= Html::encode($card->nmID) ?></b></a> </dd></div>
-                            <div class="dl_item"><dt class="card_characteristics__dt">Арт.:   </dt><dd class="card_characteristics__dd"><b><?= Html::encode($card->vendorCode) ?></b> </dd></div>
-                            <div class="dl_item"><dt class="card_characteristics__dt">Бренд:  </dt><dd class="card_characteristics__dd"><b><?= Html::encode($card->brand) ?></b></dd></div>
-                            <div class="dl_item"><dt class="card_characteristics__dt">Размер: </dt><dd class="card_characteristics__dd"><?= Html::encode($card->getDimensions(' x ')) ?></dd></div>
-                            </dl>
+                            <div class="row mb-1">
+                                <dl>
+                                    <div class="dl_item"><dt class="card_characteristics__dt">Арт. WB:</dt><dd class="card_characteristics__dd"><a href="https://www.wildberries.ru/catalog/<?= Html::encode($card->nmID) ?>/detail.aspx?targetUrl=EX" target="_blank"><b><?= Html::encode($card->nmID) ?></b></a> </dd></div>
+                                    <div class="dl_item"><dt class="card_characteristics__dt">Арт.:   </dt><dd class="card_characteristics__dd"><b><?= Html::encode($card->vendorCode) ?></b> </dd></div>
+                                    <div class="dl_item"><dt class="card_characteristics__dt">Бренд:  </dt><dd class="card_characteristics__dd"><b><?= Html::encode($card->brand) ?></b></dd></div>
+                                    <div class="dl_item"><dt class="card_characteristics__dt">Размер: </dt><dd class="card_characteristics__dd"><?= Html::encode($card->getDimensions(' x ')) ?></dd></div>
+                                </dl>
+                            </div>
+                            <div class="row mb-2 ai_button-container">
+                                    <?= Html::a('<i class="fas fa-robot"></i> AI рек.', ['/seo/index', 'status'=>'new', 'q'=>$nmId], ['class'=>'btn btn-sm btn-outline-primary', 'target'=>'_blank']) ?>
+                                    <button type="button" class="btn btn-sm btn-outline-warning ms-2" data-bs-toggle="modal" data-bs-target="#seoTargetsModal"><i class="fas fa-bullseye"></i> Целевые</button>
+                            </div>
                         </div>
                         <div class="panel-body font_11px grey panel_stats col-md-6"> 
                             <?php if ($OrdersStats): ?> 
@@ -866,6 +872,15 @@ $this->registerJsFile('https://cdn.amcharts.com/lib/5/locales/ru_RU.js', [
 }
 ?>
 
+<div class="modal fade" id="seoTargetsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="fas fa-bullseye text-warning"></i> Целевые запросы — nmID <?= $nmId ?></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><?= $this->render('/seo/_targets_block', ['nmID'=>$nmId]) ?></div>
+    </div>
+  </div>
+</div>
+
 <script>
 var YearLineChart;
 am5.ready(function() {
@@ -1135,6 +1150,9 @@ var legend = legendContainer.children.push(am5.Legend.new(YearLineRoot, {
     .paid-storage.expandable-container.is-expanded { max-height: 50000px;}
     .card-descr.expandable-container { max-height: 450px; }
     .card-descr.expandable-container.is-expanded { max-height: 50000px;}
+
+.ai_button-container {display: flex;  width: 100%; gap: 5px; margin: 0px;}
+.ai_button-container .btn {flex: 1; padding: 5px; box-sizing: border-box; }
 
 </style>
 

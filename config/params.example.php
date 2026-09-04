@@ -23,8 +23,8 @@ return [
     // OpenRouter (https://openrouter.ai/keys) для SEO — только :free, список: php yii seo/models --free-only=1
     'openRouterApiKey' => 'ЗАМЕНИТЕ_НА_КЛЮЧ_OPENROUTER',
     'openRouterModel' => 'minimax/minimax-m3:free', // альт: z-ai/glm-5.2:free, nvidia/nemotron-3.5-lightning:free
-    'seoDescriptionMin' => 800,
-    'seoDescriptionMax' => 1200,
+    'seoDescriptionMin' => 2000,
+    'seoDescriptionMax' => 5000,
     'openRouterDailyLimit' => 20,
     'openRouterReferer' => 'https://wbcms.local',
     'openRouterTitle' => 'wbcms SEO',

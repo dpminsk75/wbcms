@@ -1,7 +1,7 @@
 <?php
 
 /*
-php yii wb/sync-cards
+php yii wb/sync-cards 
 php yii wb/sync-nds
 php yii wb/sync-subjects
 */
@@ -64,11 +64,7 @@ class WbController extends Controller
             // WB больше не вернул (не удаляем их, а помечаем is_active = 0).
             $syncStartedAt = date('Y-m-d H:i:s');
 
-            $client = new Client([
-                'baseUrl' => 'https://content-api.wildberries.ru',
-            ]);
-
-            $limit = 100;
+            $limit = 500;
             $cursorUpdatedAt = null;
             $cursorNmID = null;
             $totalFetched = 0;
@@ -94,21 +90,41 @@ class WbController extends Controller
                     $body['settings']['cursor']['nmID'] = $cursorNmID;
                 }
 
-                $response = $client->createRequest()
-                    ->setMethod('POST')
-                    ->setUrl('/content/v2/get/cards/list')
-                    ->setHeaders([
-                        'Content-Type'  => 'application/json',
-                        'Authorization' => $token,
-                    ])
-                    ->setFormat(Client::FORMAT_JSON)
-                    ->setData($body)
-                    ->send();
+                // Используем WbHttpClient (CurlTransport + ретраи 429/5xx/сеть как в остальных командах)
+                // StreamTransport падает на SSL handshake timeout без ретраев - исправлено.
+                try {
+                    $response = Yii::$app->wbHttpClient->post(
+                        'https://content-api.wildberries.ru/content/v2/get/cards/list',
+                        $body,
+                        $token,
+                        $companyId
+                    );
+                } catch (\Throwable $e) {
+                    $this->stderr("WB API сетевой сбой для '{$companyName}': " . $e->getMessage() . " - повтор через 5 сек...\n", Console::FG_RED);
+                    sleep(5);
+                    try {
+                        $response = Yii::$app->wbHttpClient->post(
+                            'https://content-api.wildberries.ru/content/v2/get/cards/list',
+                            $body,
+                            $token,
+                            $companyId
+                        );
+                    } catch (\Throwable $e2) {
+                        $this->stderr("WB API повторный сбой для '{$companyName}': " . $e2->getMessage() . "\n", Console::FG_RED);
+                        $syncFailed = true;
+                        continue 2;
+                    }
+                }
 
                 if (!$response->isOk) {
-                    $this->stderr("WB API error для компании '{$companyName}': HTTP {$response->statusCode}\n", Console::FG_RED);
+                    if ((int)$response->statusCode === 429) {
+                        $this->stdout("  429 Too Many Requests - ждём 65 сек и повторяем страницу...\n", Console::FG_YELLOW);
+                        sleep(65);
+                        continue; // повторить ту же страницу, не пропускать компанию
+                    }
+                    $this->stderr("WB API error для компании '{$companyName}': HTTP {$response->statusCode} " . substr($response->content, 0, 500) . "\n", Console::FG_RED);
                     $syncFailed = true;
-                    continue 2; 
+                    continue 2;
                 }
 
                 $data = $response->data;
@@ -145,26 +161,38 @@ class WbController extends Controller
             // успели попасть в частично загруженный ответ.
             if (!$syncFailed) {
                 try {
-                    // Сначала фиксируем в истории сам факт "пропала у WB",
-                    // затем помечаем карточки неактивными.
+                    // Деактивируем только если WB перестал отдавать И нет заказов 30д.
+                    // Карточки с заказами оставляем активными (маскирование WB, ошибка выгрузки).
+                    $orderDays = 30;
+                    $cutoffOrderDate = date('Y-m-d H:i:s', strtotime("-$orderDays days"));
                     $db->createCommand("
                         INSERT INTO wbcards_history (company_id, nmID, field, old_value, new_value, changed_at)
                         SELECT company_id, nmID, 'is_active', '1', '0', :changedAt
-                        FROM wbcards
-                        WHERE company_id = :companyId AND is_active = 1 AND last_seen_at < :syncStartedAt
+                        FROM wbcards w
+                        WHERE w.company_id = :companyId AND w.is_active = 1 AND w.last_seen_at < :syncStartedAt
+                          AND NOT EXISTS (
+                            SELECT 1 FROM wb_order o
+                            WHERE o.nm_id = w.nmID AND o.date >= :cutoff
+                          )
                     ", [
                         ':changedAt'     => date('Y-m-d H:i:s'),
                         ':companyId'     => $companyId,
                         ':syncStartedAt' => $syncStartedAt,
+                        ':cutoff'        => $cutoffOrderDate,
                     ])->execute();
 
-                    $deactivated = $db->createCommand()->update('wbcards', [
-                        'is_active' => 0,
-                    ], [
-                        'and',
-                        ['company_id' => $companyId],
-                        ['is_active' => 1],
-                        ['<', 'last_seen_at', $syncStartedAt],
+                    $deactivated = $db->createCommand("
+                        UPDATE wbcards w
+                        SET w.is_active = 0
+                        WHERE w.company_id = :companyId AND w.is_active = 1 AND w.last_seen_at < :syncStartedAt
+                          AND NOT EXISTS (
+                            SELECT 1 FROM wb_order o
+                            WHERE o.nm_id = w.nmID AND o.date >= :cutoff
+                          )
+                    ", [
+                        ':companyId' => $companyId,
+                        ':syncStartedAt' => $syncStartedAt,
+                        ':cutoff' => $cutoffOrderDate,
                     ])->execute();
 
                     if ($deactivated > 0) {
@@ -293,6 +321,13 @@ class WbController extends Controller
                 'is_active'       => $columns['is_active'],
             ])->execute();
 
+            // Гибрид: JSON в wbcards.sizes остаётся источником, wb_card_size — индексируемая развёртка для остатков FBS
+            try {
+                \app\models\WbCardSize::syncForCard($nmID, $card['sizes'] ?? null);
+            } catch (\Throwable $e) {
+                $this->stderr("  -> WbCardSize sync failed nmID={$nmID}: " . $e->getMessage() . "\n");
+            }
+
         } catch (\Exception $e) {
             $this->stderr("Failed to upsert card nmID={$nmID} for company {$companyId}: " . $e->getMessage() . "\n");
         }
@@ -401,6 +436,53 @@ public function actionSyncNds(): int
         }
 
         $this->stdout("Обработка НДС завершена. Успешно: {$processedCount}, записано изменений: {$updatedCount}\n", Console::FG_GREEN);
+        return ExitCode::OK;
+    }
+
+    /**
+     * Бекфилл развёртки wbcards.sizes -> wbcards_sizes.
+     * Запуск: php yii wb/backfill-card-sizes
+     */
+    public function actionBackfillCardSizes(): int
+    {
+        $db = Yii::$app->db;
+        $total = (int)(new \yii\db\Query())->from('wbcards')->count('*', $db);
+        $this->stdout("Бекфилл wbcards_sizes: всего карточек $total\n", Console::FG_CYAN);
+
+        $done = 0;
+        $inserted = 0;
+        $batch = 500;
+        $lastNmID = 0;
+
+        while (true) {
+            $rows = (new \yii\db\Query())
+                ->select(['nmID', 'sizes'])
+                ->from('wbcards')
+                ->where(['>', 'nmID', $lastNmID])
+                ->orderBy(['nmID' => SORT_ASC])
+                ->limit($batch)
+                ->all($db);
+
+            if (empty($rows)) {
+                break;
+            }
+
+            foreach ($rows as $r) {
+                $lastNmID = (int)$r['nmID'];
+                try {
+                    $cnt = \app\models\WbCardSize::syncForCard((int)$r['nmID'], $r['sizes'] ?? null);
+                    $inserted += $cnt;
+                } catch (\Throwable $e) {
+                    $this->stderr("  nmID {$r['nmID']}: " . $e->getMessage() . "\n");
+                }
+                $done++;
+                if ($done % 500 === 0) {
+                    $this->stdout("  ... $done / $total, sku вставлено $inserted\n");
+                }
+            }
+        }
+
+        $this->stdout("Готово: карточек $done, всего sku $inserted\n", Console::FG_GREEN);
         return ExitCode::OK;
     }
 

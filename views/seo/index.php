@@ -109,8 +109,8 @@ $columns = [];
 $columns[] = [
     'label' => 'Товар',
     'format' => 'raw',
-    'headerOptions' => ['style' => 'width:240px'],
-    'contentOptions' => ['style' => 'width:240px; vertical-align:top; padding:0'],
+    'headerOptions' => ['style' => 'width:280px'],
+    'contentOptions' => ['class' => 'product-cell', 'style' => 'width:280px; vertical-align:top; padding:0'],
     'value' => function($m) use ($isAdmin) {
         $card = $m->card;
         $photos = $card ? $card->getPhotosArray() : [];
@@ -124,12 +124,12 @@ $columns[] = [
         $phrasesLink = Html::a('фразы', ['/wb-search/card','DPFilterForm'=>['nm_id'=>$m->nmID]], ['target'=>'_blank','data-pjax'=>0,'style'=>'font-size:11px;margin-left:6px']);
         $textBlock = Html::tag('div', $title . $subj . $vendor . Html::tag('div', $wbLink.$phrasesLink), ['style'=>'min-width:0']);
         $top = Html::tag('div', $photoTag . $textBlock, ['style'=>'display:flex;gap:8px;align-items:flex-start']);
-        $btnView = Html::a('<i class="fas fa-eye"></i>', ['view','id'=>$m->id], ['class'=>'btn btn-xs btn-outline-primary','title'=>'Открыть','style'=>'padding:2px 6px;font-size:11px']);
+        $btnView = Html::a('<i class="fas fa-eye"></i>', ['view','id'=>$m->id], ['class'=>'btn btn-xs btn-outline-primary seo-action-btn','title'=>'Открыть']);
         $btnOk = $m->status==='new'
-            ? Html::a('<i class="fas fa-check"></i>', ['mark-viewed','id'=>$m->id], ['class'=>'btn btn-xs btn-success','title'=>'Просмотрено','data-method'=>'post','data-confirm'=>'Отметить как просмотрено?','style'=>'padding:2px 6px;font-size:11px'])
-            : '<span class="badge bg-success" style="font-size:10px">просмотрено</span>';
-        $btnRe = Html::a('<i class="fas fa-undo"></i>', ['requeue','id'=>$m->id], ['class'=>'btn btn-xs '.($m->status==='viewed'?'btn-warning':'btn-outline-warning'),'title'=>'Вернуть в обработку','data-method'=>'post','style'=>'padding:2px 6px;font-size:11px']);
-        $btns = Html::tag('div', $btnView.' '.$btnOk.' '.$btnRe, ['style'=>'margin-top:6px;display:flex;gap:4px;flex-wrap:wrap']);
+            ? Html::a('<i class="fas fa-check"></i>', ['mark-viewed','id'=>$m->id], ['class'=>'btn btn-xs btn-success seo-action-btn','title'=>'Просмотрено','data-method'=>'post','data-confirm'=>'Отметить как просмотрено?'])
+            : '<span class="badge bg-success seo-action-badge">просмотрено</span>';
+        $btnRe = Html::a('<i class="fas fa-undo"></i>', ['requeue','id'=>$m->id], ['class'=>'btn btn-xs '.($m->status==='viewed'?'btn-warning':'btn-outline-warning').' seo-action-btn','title'=>'Вернуть в обработку','data-method'=>'post']);
+        $btns = Html::tag('div', $btnView.' '.$btnOk.' '.$btnRe, ['class'=>'seo-btns-row']);
         $idBadge = Html::tag('div', '#'.$m->id.' • '.Yii::$app->formatter->asDate($m->created_at,'php:d.m H:i'), ['style'=>'font-size:10px;color:#999;margin-top:4px']);
         $main = $top . $btns . $idBadge;
 
@@ -147,7 +147,7 @@ $columns[] = [
             );
         }
         // flex-колонка чтобы admin был внизу
-        return Html::tag('div', $main . $admin, ['style'=>'display:flex;flex-direction:column;height:100%;min-height:160px;padding:8px']);
+        return Html::tag('div', $main . $admin, ['class'=>'product-cell-inner','style'=>'padding:8px;min-height:160px']);
     }
 ];
 
@@ -155,8 +155,8 @@ $columns[] = [
 $columns[] = [
     'label' => 'Rationale',
     'format' => 'raw',
-    'headerOptions' => ['style' => 'width:220px'],
-    'contentOptions' => ['style' => 'width:220px;white-space:normal;font-size:11.5px;line-height:1.3;vertical-align:top'],
+    'headerOptions' => ['style' => 'width:300px'],
+    'contentOptions' => ['style' => 'width:300px;white-space:normal;font-size:11.5px;line-height:1.3;vertical-align:top'],
     'value' => function($m){
         $text = Html::encode($m->rationale ?? '');
         // риски если есть
@@ -175,8 +175,8 @@ $columns[] = [
 $columns[] = [
     'label' => 'Старое',
     'format' => 'raw',
-    'headerOptions' => ['style' => 'width:280px'],
-    'contentOptions' => ['style' => 'width:280px;white-space:normal;vertical-align:top'],
+    'headerOptions' => ['style' => 'width:320px'],
+    'contentOptions' => ['style' => 'width:320px;white-space:normal;vertical-align:top'],
     'value' => function($m){
         $oldTitle = Html::encode($m->old_title ?? '');
         $oldDesc = Html::encode($m->old_description ?? '');
@@ -199,8 +199,8 @@ $columns[] = [
 $columns[] = [
     'label' => 'Новое',
     'format' => 'raw',
-    'headerOptions' => ['style' => 'width:280px'],
-    'contentOptions' => ['style' => 'width:280px;white-space:normal;vertical-align:top'],
+    'headerOptions' => ['style' => 'width:320px'],
+    'contentOptions' => ['style' => 'width:320px;white-space:normal;vertical-align:top'],
     'value' => function($m){
         $newTitle = Html::encode($m->new_title ?? '');
         $newDesc = Html::encode($m->new_description ?? '');
@@ -221,8 +221,8 @@ $columns[] = [
 $columns[] = [
     'label' => 'Ключи',
     'format' => 'raw',
-    'headerOptions' => ['style' => 'width:160px'],
-    'contentOptions' => ['style' => 'width:160px;white-space:normal;vertical-align:top;font-size:11px'],
+    'headerOptions' => ['style' => 'width:130px'],
+    'contentOptions' => ['style' => 'width:130px;white-space:normal;vertical-align:top;font-size:11px'],
     'value' => function($m){
         $added = $m->keywords_added ? json_decode($m->keywords_added, true) : [];
         $removed = $m->keywords_removed ? json_decode($m->keywords_removed, true) : [];
@@ -309,6 +309,11 @@ $columns[] = [
 <style>
 .seo-table th { font-size:11px; font-weight:600; color:#333; vertical-align:middle; text-align:center; background:#fafafa; }
 .seo-table td { font-size:12px; }
+.seo-table td.product-cell { position:relative; }
+.seo-table td.product-cell > .product-cell-inner { position:absolute; inset:0; display:flex; flex-direction:column; box-sizing:border-box; }
+.seo-btns-row { margin-top:6px; display:flex; gap:4px; flex-wrap:wrap; }
+.seo-action-btn { padding: 4px 6px; font-size: 13px; height: 25px; }
+.seo-action-badge { font-size:10px; }
 .cart-item-title { font-weight:600; color:#2c3e50; }
 .cart-item-details { color:#666; }
 .seo-table .btn-xs { line-height:1; }
