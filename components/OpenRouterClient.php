@@ -22,7 +22,9 @@ class OpenRouterClient extends Component
 
     public ?string $lastError = null;
     public ?int $lastStatus = null;
-    public ?string $lastResponse = null;
+    /** @var mixed строка или массив ответа */
+    public $lastResponse = null;
+    public ?string $lastModel = null;
 
     private ?Client $client = null;
 
@@ -42,7 +44,7 @@ class OpenRouterClient extends Component
      * @param string $model например google/gemma-3-27b-it:free
      * @return array|null ['content'=>string, 'prompt_tokens'=>int, 'completion_tokens'=>int, 'raw'=>array] или null при ошибке
      */
-    public function chat(array $messages, ?string $model = null, ?string $apiKey = null, float $temperature = 0.4, ?int $companyId = null): ?array
+    public function chat(array $messages, ?string $model = null, ?string $apiKey = null, float $temperature = 0.4, ?int $companyId = null, ?int $maxTokens = null): ?array
     {
         // per-company overrides
         $company = $companyId ? \app\models\Company::findOne($companyId) : null;
@@ -50,6 +52,7 @@ class OpenRouterClient extends Component
         $this->lastError = null;
         $this->lastStatus = null;
         $this->lastResponse = null;
+        $this->lastModel = $model;
         $apiKey = $apiKey ?: ($company && $company->seo_openrouter_key ? $company->seo_openrouter_key : (Yii::$app->params['openRouterApiKey'] ?? ''));
         if ($apiKey === '') {
             $this->lastError = 'openRouterApiKey is empty in params.php / companies.seo_openrouter_key';
@@ -58,11 +61,21 @@ class OpenRouterClient extends Component
         }
 
         $url = $this->baseUrl . '/chat/completions';
+        // max_tokens: явный параметр > автоопределение по типу сводки
+        if ($maxTokens === null) {
+            $isSummary = false;
+            foreach ($messages as $mm) {
+                if (isset($mm['content']) && str_contains($mm['content'], '"title_recommendations"')) {
+                    $isSummary = true; break;
+                }
+            }
+            $maxTokens = $isSummary ? 4000 : 1500;
+        }
         $payload = [
             'model' => $model,
             'messages' => $messages,
             'temperature' => $temperature,
-            'max_tokens' => 1500,
+            'max_tokens' => $maxTokens,
         ];
 
         $headers = [

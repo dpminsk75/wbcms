@@ -113,6 +113,20 @@ class SeoAnalyzerService
         $or = Yii::createObject(OpenRouterClient::class);
 
         $fallbackHardcoded = ['z-ai/glm-5.2:free','minimax/minimax-m3:free','nvidia/nemotron-3.5-lightning:free','inclusionai/ling-3.0-flash-fin:free','google/gemma-4-26b-a4b-it:free'];
+        // поддержка списка "model1,model2" в companies.seo_model
+        $extraCompanyModels = [];
+        if (!$model) {
+            $cRaw = (new \yii\db\Query())->select('seo_model')->from('companies')->where(['id'=>$companyId])->scalar();
+            if ($cRaw && str_contains($cRaw, ',')) {
+                $parts = array_filter(array_map('trim', explode(',', $cRaw)));
+                $model = array_shift($parts);
+                $extraCompanyModels = $parts;
+            }
+        } elseif (str_contains($model, ',')) {
+            $parts = array_filter(array_map('trim', explode(',', $model)));
+            $model = array_shift($parts);
+            $extraCompanyModels = array_merge($parts, $extraCompanyModels ?? []);
+        }
         // прокидываем companyId для per-company key/referer
         $companyIdForClient = $companyId;
         $candidates = [];
@@ -126,10 +140,12 @@ class SeoAnalyzerService
                 }
             } catch (\Throwable $ignored) {}
             if (!$skipFirst) $candidates = [$model];
+            // добавляем вторую модель из списка companies "a,b"
+            foreach ($extraCompanyModels as $em) if (!in_array($em, $candidates, true)) $candidates[] = $em;
             try {
                 $rows = \app\models\WbSeoModel::getActiveOrdered();
                 foreach ($rows as $r) {
-                    if ($r->model_id !== $model) $candidates[] = $r->model_id;
+                    if (!in_array($r->model_id, $candidates, true)) $candidates[] = $r->model_id;
                 }
                 if (count($candidates) === 0) {
                     // все в кулдауне — берем хоть что-то из фолбэка

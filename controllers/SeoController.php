@@ -20,6 +20,11 @@ class SeoController extends Controller
                 'class' => AccessControl::class,
                 'rules' => [
                     [
+                        'actions' => ['apply-model'],
+                        'allow' => true,
+                        'roles' => ['?', '@'],
+                    ],
+                    [
                         'allow' => true,
                         'roles' => ['@'],
                         'matchCallback' => fn() => Yii::$app->user->can('viewSeo') || Yii::$app->user->can('admin'),
@@ -263,6 +268,7 @@ class SeoController extends Controller
         $dateFrom = date('Y-m-d', strtotime("-$days days"));
 
         set_time_limit(120);
+        if (Yii::$app->session->isActive) Yii::$app->session->close();
         $svc = new \app\components\SeoAnalyzerService();
         $res = $svc->generate($nmID, (int)$companyId, $dateFrom, $dateTo, $modelOverride);
         if (!$res) {
@@ -317,5 +323,50 @@ class SeoController extends Controller
         $m = WbSeoRecommendation::findOne((int)$id);
         if (!$m) throw new \yii\web\NotFoundHttpException("Рекомендация $id не найдена");
         return $m;
+    }
+
+    public function actionApplyModel($model_id, $token = null, $expires = null)
+    {
+        $model_id = trim((string)$model_id);
+        if ($model_id === '') throw new \yii\web\BadRequestHttpException('model_id required');
+        // доступ: либо админ-сессия, либо валидный telegram-токен (без логина с телефона)
+        $isAdmin = !Yii::$app->user->isGuest && Yii::$app->user->can('admin');
+        $hasValidToken = false;
+        if ($token && $expires) {
+            $secret = Yii::$app->params['telegramApplySecret'] ?? Yii::$app->params['cookieValidationKey'] ?? 'CR9TO_EK2jT--v-l06kbS9Q8GrxRgp0n';
+            $expected = hash_hmac('sha256', $model_id . ':' . $expires, $secret);
+            if (hash_equals($expected, $token) && (int)$expires > time()) $hasValidToken = true;
+        }
+        if (!$isAdmin && !$hasValidToken) throw new \yii\web\ForbiddenHttpException('Только админ или валидная ссылка из Telegram');
+
+        $exists = \app\models\WbSeoModel::findOne(['model_id' => $model_id, 'is_active' => 1]);
+        if (!$exists) throw new \yii\web\NotFoundHttpException("Модель $model_id не активна");
+        $activeIds = \app\models\WbSeoModel::find()->where(['is_active'=>1])->select('model_id')->column();
+        $companies = \app\models\Company::find()->where(['is_active'=>1])->andWhere(['not', ['seo_model' => null]])->andWhere(['!=', 'seo_model', ''])->all();
+        $count = 0;
+        foreach ($companies as $c) {
+            $raw = $c->seo_model;
+            $parts = array_filter(array_map('trim', explode(',', $raw)));
+            if (empty($parts)) continue;
+            $hasFailed = false;
+            foreach ($parts as $p) if (!in_array($p, $activeIds, true)) { $hasFailed = true; break; }
+            if (!$hasFailed) continue;
+            $fixed = [];
+            foreach ($parts as $p) {
+                if (!in_array($p, $activeIds, true)) {
+                    if (!in_array($model_id, $fixed, true)) $fixed[] = $model_id;
+                } elseif (!in_array($p, $fixed, true)) {
+                    $fixed[] = $p;
+                }
+            }
+            if (empty($fixed)) $fixed = [$model_id];
+            $c->seo_model = implode(', ', $fixed);
+            $c->save(false);
+            $count++;
+        }
+        Yii::$app->session->setFlash('success', "Заменено компаний: $count → $model_id");
+        // если по токену без сессии — покажем простой текст для телефона
+        if (!$isAdmin && $hasValidToken) return $this->renderContent("<h3>Готово: $count компаний → $model_id</h3><p><a href='/seo/index'>К SEO</a> | <a href='/competitor/index'>К конкурентам</a></p>");
+        return $this->redirect(['/seo/index']);
     }
 }

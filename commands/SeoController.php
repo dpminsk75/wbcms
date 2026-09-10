@@ -271,6 +271,21 @@ class SeoController extends Controller
             }
         }
         $this->stdout("Синхронизировано free: " . count($free) . " (добавлено $added, обновлено $updated)\n", Console::FG_GREEN);
+        // деактивируем модели которых больше нет в free (как minimax:m3:free → 404)
+        $freeIds = array_column($free, 'id');
+        $activeRows = \app\models\WbSeoModel::find()->where(['is_active' => 1])->all();
+        $deactivated = 0;
+        foreach ($activeRows as $row) {
+            if (!in_array($row->model_id, $freeIds, true)) {
+                $row->is_active = 0;
+                $row->last_error = 'deactivated by sync-models: not in free list (' . date('Y-m-d') . ')';
+                $row->updated_at = $now;
+                $row->save(false);
+                $deactivated++;
+                $this->stdout("  deactivated: {$row->model_id}\n", Console::FG_YELLOW);
+            }
+        }
+        if ($deactivated) $this->stdout("Деактивировано: $deactivated\n", Console::FG_YELLOW);
         return ExitCode::OK;
     }
 

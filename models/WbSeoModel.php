@@ -65,7 +65,7 @@ class WbSeoModel extends ActiveRecord
     {
         $this->error_count++;
         $this->consecutive_errors++;
-        $this->last_error = mb_substr($error,0,500);
+        $this->last_error = mb_substr($error,0,480);
         $this->updated_at = date('Y-m-d H:i:s');
         if ($is429) {
             $this->last_429_at = date('Y-m-d H:i:s');
@@ -77,7 +77,7 @@ class WbSeoModel extends ActiveRecord
         // авто-отключение после 10 подряд ошибок
         if ($this->consecutive_errors >= 10) {
             $this->is_active = 0;
-            $this->last_error .= ' | auto-disabled';
+            $this->last_error = mb_substr($this->last_error,0,480) . ' | auto-disabled';
         }
         $this->save(false);
     }

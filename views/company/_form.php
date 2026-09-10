@@ -36,7 +36,11 @@ use yii\bootstrap5\Html;
                     <div class="col-6"><?= $form->field($model, 'seo_openrouter_referer')->textInput(['placeholder'=>'https://wbcms.local']) ?></div>
                     <div class="col-6"><?= $form->field($model, 'seo_openrouter_title')->textInput(['placeholder'=>'wbcms SEO']) ?></div>
                 </div>
-                <?= $form->field($model, 'seo_model')->textInput(['placeholder'=>'minimax/minimax-m3:free'])->hint('Команда: php yii seo/models — список :free') ?>
+                <?= $form->field($model, 'seo_model')->textInput(['placeholder'=>'openrouter/free'])->hint('Команда: php yii seo/models — список :free') ?>
+                <div class="row g-2">
+                    <div class="col-6"><?= $form->field($model, 'seo_summary_model')->textInput(['placeholder'=>'minimax/minimax-m3 (платная)'])->hint('Для сводки — можно платную') ?></div>
+                    <div class="col-6"><?= $form->field($model, 'seo_summary_max_tokens')->textInput(['type'=>'number','placeholder'=>'4000'])->hint('Пусто = 4000') ?></div>
+                </div>
                 <div class="row">
                     <div class="col-4"><?= $form->field($model, 'seo_daily_limit')->textInput(['type'=>'number','placeholder'=>'20']) ?></div>
                     <div class="col-4"><?= $form->field($model, 'seo_desc_min')->textInput(['type'=>'number','placeholder'=>'2000']) ?></div>
@@ -45,6 +49,10 @@ use yii\bootstrap5\Html;
                 <?= $form->field($model, 'seo_anti_spam_days')->textInput(['type'=>'number','placeholder'=>'14']) ?>
                 <?= $form->field($model, 'seo_prompt')->textarea(['rows'=>6, 'placeholder'=>'Пусто = дефолт: Ты — SEO-специалист Wildberries...']) 
                     ->hint('Переменная {DESC_MIN}/{DESC_MAX} подставится автоматически. Оставь пустым для стандартного.') ?>
+                <?= $form->field($model, 'seo_competitor_prompt')->textarea(['rows'=>8, 'placeholder'=>'Промпт для анализа одного конкурента...'])
+                    ->hint('Оставь пустым для стандартного. Формат: JSON с competitor_better, we_better, recommendations.') ?>
+                <?= $form->field($model, 'seo_summary_prompt')->textarea(['rows'=>10, 'placeholder'=>'Промпт для сводной рекомендации (заголовок + описание)...'])
+                    ->hint('Переменные {DESC_MIN}/{DESC_MAX} подставятся автоматически. Оставь пустым для стандартного.') ?>
                 <div class="form-text small text-muted">Длина описания и анти-спам влияют на промпт ИИ.</div>
             </div>
         </div>

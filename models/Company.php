@@ -24,6 +24,10 @@ use yii\db\ActiveRecord;
  * @property string|null $seo_openrouter_referer
  * @property string|null $seo_openrouter_title
  * @property string|null $seo_prompt
+ * @property string|null $seo_competitor_prompt
+ * @property string|null $seo_summary_prompt
+ * @property string|null $seo_summary_model
+ * @property int|null $seo_summary_max_tokens
  */
 class Company extends ActiveRecord
 {
@@ -41,12 +45,16 @@ class Company extends ActiveRecord
             [['inn'], 'string', 'max' => 12],
             [['inn'], 'match', 'pattern' => '/^\d{10,12}$/', 'message' => 'ИНН 10 или 12 цифр', 'skipOnEmpty' => true],
             [['api_key'], 'string'],
-            [['seo_model'], 'string', 'max'=>120],
+            [['seo_model'], 'string', 'max'=>255],
+            [['seo_summary_model'], 'string', 'max'=>255],
+            [['seo_summary_max_tokens'], 'integer', 'min'=>500, 'max'=>20000],
             [['seo_openrouter_key'], 'string'],
             [['seo_openrouter_referer','seo_openrouter_title'], 'string', 'max'=>255],
             [['seo_prompt'], 'string'],
+            [['seo_competitor_prompt'], 'string'],
+            [['seo_summary_prompt'], 'string'],
             [['seo_daily_limit','seo_desc_min','seo_desc_max','seo_anti_spam_days'], 'integer', 'min'=>1, 'max'=>5000],
-            [['seo_daily_limit','seo_desc_min','seo_desc_max','seo_anti_spam_days'], 'default', 'value'=>null],
+            [['seo_daily_limit','seo_desc_min','seo_desc_max','seo_anti_spam_days','seo_summary_max_tokens'], 'default', 'value'=>null],
             [['is_active', 'fbs_deduct_enabled', 'fbs_deduct_test'], 'boolean'],
             [['is_active', 'fbs_deduct_enabled', 'fbs_deduct_test'], 'default', 'value' => 1],
         ];
@@ -63,7 +71,7 @@ class Company extends ActiveRecord
             'is_active' => 'Активна',
             'fbs_deduct_enabled' => 'Списание FBS',
             'fbs_deduct_test' => 'Тестовый режим FBS',
-            'seo_model' => 'SEO модель (OpenRouter)',
+            'seo_model' => 'SEO модель (OpenRouter) — можно 2 через запятую',
             'seo_daily_limit' => 'SEO лимит/день',
             'seo_desc_min' => 'SEO описание мин',
             'seo_desc_max' => 'SEO описание макс',
@@ -72,9 +80,28 @@ class Company extends ActiveRecord
             'seo_openrouter_referer' => 'OpenRouter Referer',
             'seo_openrouter_title' => 'OpenRouter Title',
             'seo_prompt' => 'SEO промпт (system)',
+            'seo_competitor_prompt' => 'Промпт анализа конкурента (system)',
+            'seo_summary_prompt' => 'Промпт сводной рекомендации (system)',
+            'seo_summary_model' => 'Модель для сводки (платная) — можно 2 через запятую',
+            'seo_summary_max_tokens' => 'max_tokens для сводки',
             'created_at' => 'Создана',
             'updated_at' => 'Обновлена',
         ];
+    }
+
+    public function getSeoModels(): array
+    {
+        $raw = $this->seo_model ?? '';
+        $parts = array_filter(array_map('trim', explode(',', $raw)));
+        return $parts ?: [];
+    }
+
+    public function getSummaryModels(): array
+    {
+        $raw = $this->seo_summary_model ?? '';
+        if (trim($raw) === '') return $this->getSeoModels();
+        $parts = array_filter(array_map('trim', explode(',', $raw)));
+        return $parts ?: $this->getSeoModels();
     }
 
     /**
