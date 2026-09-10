@@ -13,6 +13,8 @@ class m260828_000002_fbs_stock_role extends Migration
         $this->ensurePermission('/wb-fbs-virtual/*', 'Маршруты FBS virtual');
         $this->ensurePermission('/wb-fbs/*', 'Синхронизация складов WB');
         $this->ensurePermission('/wb-fbs-virtual/deduct-log', 'Лог вычета');
+        $this->ensurePermission('/wb-doc/*', 'Документы склада');
+        $this->ensurePermission('/our-warehouse/*', 'Реальные склады');
 
         $this->ensureRole('fbsManager', 'Управление остатками');
 
@@ -20,6 +22,8 @@ class m260828_000002_fbs_stock_role extends Migration
         $this->ensureChild('fbsManager', '/wb-fbs-virtual/*');
         $this->ensureChild('fbsManager', '/wb-fbs/*');
         $this->ensureChild('fbsManager', '/wb-fbs-virtual/deduct-log');
+        $this->ensureChild('fbsManager', '/wb-doc/*');
+        $this->ensureChild('fbsManager', '/our-warehouse/*');
         $this->ensureChild('fbsManager', 'viewDashboard');
 
         // Админ также может управлять остатками
@@ -32,8 +36,8 @@ class m260828_000002_fbs_stock_role extends Migration
     {
         $this->delete('{{%auth_assignment}}', ['item_name' => 'fbsManager']);
         $this->delete('{{%auth_item_child}}', ['parent' => 'fbsManager']);
-        $this->delete('{{%auth_item_child}}', ['child' => ['manageFbsStocks','/wb-fbs-virtual/*','/wb-fbs/*','/wb-fbs-virtual/deduct-log']]);
-        $this->delete('{{%auth_item}}', ['name' => ['manageFbsStocks','/wb-fbs-virtual/*','/wb-fbs/*','/wb-fbs-virtual/deduct-log','fbsManager']]);
+        $this->delete('{{%auth_item_child}}', ['child' => ['manageFbsStocks','/wb-fbs-virtual/*','/wb-fbs/*','/wb-fbs-virtual/deduct-log','/wb-doc/*','/our-warehouse/*']]);
+        $this->delete('{{%auth_item}}', ['name' => ['manageFbsStocks','/wb-fbs-virtual/*','/wb-fbs/*','/wb-fbs-virtual/deduct-log','/wb-doc/*','/our-warehouse/*','fbsManager']]);
         echo "  fbsManager rolled back\n";
     }
 

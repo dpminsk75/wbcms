@@ -440,6 +440,9 @@ class WbFbsVirtualController extends Controller
             return ['success' => false, 'error' => 'Нет токена компании'];
         }
 
+        // Снимаем lock сессии — иначе второй таб "Отчёты" висит пока WB API отвечает (аналог CompetitorController:641)
+        if (Yii::$app->session->isActive) Yii::$app->session->close();
+
         $results = [];
         foreach ($warehouses as $wh) {
             $payload = ['stocks' => [['chrtId' => (int)$stock->chrtID, 'amount' => (int)$stock->quantity]]];
@@ -506,6 +509,8 @@ class WbFbsVirtualController extends Controller
         if (!$token && !$isTest) {
             return ['success' => false, 'error' => 'Нет токена'];
         }
+        // Снимаем lock сессии перед долгим циклом PUT (аналог UploadOne)
+        if (Yii::$app->session->isActive) Yii::$app->session->close();
 
         $payloadStocks = [];
         foreach ($stocks as $s) {

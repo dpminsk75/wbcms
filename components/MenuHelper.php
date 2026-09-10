@@ -93,6 +93,8 @@ class MenuHelper
                 ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
                 ['label' => 'SEO рекомендации', 'url' => ['/seo/index'], 'visible' => Yii::$app->user->can('viewSeo') || Yii::$app->user->can('admin')],
                 ['label' => 'SEO просмотренные', 'url' => ['/seo/index','status'=>'viewed'], 'visible' => Yii::$app->user->can('viewSeo') || Yii::$app->user->can('admin')],
+                ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
+                ['label' => 'Конкуренты (анализ)', 'url' => ['/competitor/index'], 'visible' => Yii::$app->user->can('viewSeo') || Yii::$app->user->can('admin')],
             ],
         ],
 
@@ -166,6 +168,8 @@ class MenuHelper
             'options' => ['class' => 'wb-menu__item'],
             'items' => [
                 ['label' => 'Управление остатками', 'url' => ['/wb-fbs-virtual/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                ['label' => 'Документы', 'url' => ['/wb-doc/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                ['label' => 'Склады', 'url' => ['/our-warehouse/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
             ],
         ],
 
