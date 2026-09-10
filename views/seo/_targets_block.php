@@ -4,6 +4,10 @@ use yii\helpers\Url;
 
 /** @var int $nmID */
 /** @var \app\models\WbSeoTarget[] $targets */
+if (empty($nmID)) {
+    echo '<div class="text-muted small">Выберите карточку, чтобы управлять целевыми запросами.</div>';
+    return;
+}
 $targets = $targets ?? \app\models\WbSeoTarget::find()->where(['nmID'=>$nmID])->orderBy(['priority'=>SORT_ASC])->all();
 ?>
 <div class="card border-warning" id="seo-targets-block-<?= $nmID ?>">
@@ -32,9 +36,10 @@ $targets = $targets ?? \app\models\WbSeoTarget::find()->where(['nmID'=>$nmID])->
 $addUrl = Url::to(['/seo/add-target']);
 $removeUrl = Url::to(['/seo/remove-target']);
 $csrf = Yii::$app->request->csrfToken;
+$nmIDJson = json_encode($nmID);
 $js = <<<JS
 (function(){
-  var nmID = $nmID;
+  var nmID = $nmIDJson;
   var block = document.getElementById('seo-targets-block-'+nmID);
   var addBtn = block.querySelector('.seo-target-add');
   var input = document.getElementById('seo-target-input-'+nmID);

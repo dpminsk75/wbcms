@@ -3,7 +3,7 @@
 namespace app\commands;
 
 use Yii;
-use yii\console\Controller;
+use yii\console\Controller; 
 use yii\console\ExitCode;
 use yii\helpers\Console;
 use yii\helpers\Json;
@@ -16,6 +16,8 @@ use app\models\WbReplyTemplatePart;
  *
  * Пример запуска:
  * php yii wb-auto-reply/process
+ * php yii wb-auto-reply/process-range 2025-08-24 2025-08-30
+ * php yii wb-auto-reply/process-range 2025-08-24
  */
 class WbAutoReplyController extends Controller
 {
@@ -36,6 +38,49 @@ class WbAutoReplyController extends Controller
 
     public function actionProcess()
     {
+        // Отзывы за сегодня. WB API принимает dateFrom/dateTo как unix timestamp.
+        $startTimestamp = strtotime(date('Y-m-d') . ' 00:00:00');
+        $endTimestamp = strtotime(date('Y-m-d') . ' 23:59:59');
+
+        return $this->processPeriod($startTimestamp, $endTimestamp, date('Y-m-d'), date('Y-m-d'));
+    }
+
+    /**
+     * Автоответ за произвольный период (отдельная команда для прогона прошлых дат).
+     *
+     * Пример:
+     * php yii wb-auto-reply/process-range 2025-08-24 2025-08-30
+     * php yii wb-auto-reply/process-range 2025-08-24  (только за один день)
+     * php yii wb-auto-reply/process-range              (как process — сегодня)
+     *
+     * @param string|null $dateFrom ГГГГ-ММ-ДД
+     * @param string|null $dateTo ГГГГ-ММ-ДД
+     */
+    public function actionProcessRange($dateFrom = null, $dateTo = null)
+    {
+        if ($dateFrom === null) {
+            $dateFrom = date('Y-m-d');
+        }
+        if ($dateTo === null) {
+            $dateTo = $dateFrom;
+        }
+
+        $startTimestamp = strtotime($dateFrom . ' 00:00:00');
+        $endTimestamp = strtotime($dateTo . ' 23:59:59');
+
+        if (!$startTimestamp || !$endTimestamp || $startTimestamp > $endTimestamp) {
+            $this->stderr("Ошибка: некорректный диапазон дат. Используйте: php yii wb-auto-reply/process-range 2025-08-24 2025-08-30\n", Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        return $this->processPeriod($startTimestamp, $endTimestamp, $dateFrom, $dateTo);
+    }
+
+    /**
+     * Общая логика прогона за период [startTimestamp, endTimestamp].
+     */
+    private function processPeriod($startTimestamp, $endTimestamp, $dateFromStr, $dateToStr)
+    {
         $companies = (new \yii\db\Query())
             ->select(['id', 'name', 'api_key'])
             ->from('companies')
@@ -47,11 +92,7 @@ class WbAutoReplyController extends Controller
             return ExitCode::UNSPECIFIED_ERROR;
         }
 
-        // Отзывы за сегодня. WB API принимает dateFrom/dateTo как unix timestamp.
-        $startTimestamp = strtotime(date('Y-m-d') . ' 00:00:00');
-        $endTimestamp = strtotime(date('Y-m-d') . ' 23:59:59');
-
-        $this->stdout("=== ЗАПУСК АВТООТВЕТЧИКА ===\n", Console::FG_CYAN);
+        $this->stdout("=== ЗАПУСК АВТООТВЕТЧИКА ({$dateFromStr} - {$dateToStr}) ===\n", Console::FG_CYAN);
 
         foreach ($companies as $company) {
             $token = $company['api_key'] ?? null;
@@ -61,22 +102,26 @@ class WbAutoReplyController extends Controller
 
             $this->stdout("\nКомпания: {$company['name']}\n", Console::FG_YELLOW);
 
-            // 1. Синхронизируем ВСЕ отзывы за сегодня (и отвеченные, и неотвеченные).
+            // 1. Синхронизируем ВСЕ отзывы за период (и отвеченные, и неотвеченные).
             //    Это важно: если кто-то ответил на отзыв вручную (не через наш скрипт),
             //    поле answer в БД должно это отразить, иначе мы попытаемся ответить повторно.
-            $this->stdout("Синхронизация отзывов за сегодня...\n", Console::FG_GREY);
+            $this->stdout("Синхронизация отзывов за период {$dateFromStr} - {$dateToStr}...\n", Console::FG_GREY);
             $this->syncTodayFeedbacks($company['id'], $token, $startTimestamp, $endTimestamp);
+            // Для прошлых дат отзывы уже в архиве: тянем /api/v1/feedbacks/archive (take/skip/order) и фильтруем по createdDate локально
+            $this->syncArchiveFeedbacks($company['id'], $token, $startTimestamp, $endTimestamp);
 
             // 2. Ищем отзывы, подходящие под условия:
             //    - есть оценка (productValuation > 0)
             //    - нет текста / плюсов / минусов
             //    - нет ответа вообще (answer пуст) — то есть НИКТО ещё не отвечал
             //    - is_auto_replied = 0 — на всякий случай, если answer почему-то не синхронизировался
+            //    - createdDate в запрошенном диапазоне (важно для process-range)
             $feedbacksToProcess = (new \yii\db\Query())
                 ->select(['f.*', 'card_brand' => 'c.brand'])
                 ->from(['f' => 'wb_feedbacks'])
                 ->leftJoin(['c' => 'wbcards'], 'c.nmID = f.nmID')
                 ->where(['f.company_id' => $company['id']])
+                ->andWhere(['between', 'f.createdDate', date('Y-m-d H:i:s', $startTimestamp), date('Y-m-d H:i:s', $endTimestamp)])
                 ->andWhere(['f.is_auto_replied' => 0])
                 ->andWhere(['>', 'f.productValuation', 0])
                 ->andWhere(['or', ['f.text' => null], ['f.text' => '']])
@@ -444,6 +489,7 @@ class WbAutoReplyController extends Controller
                 ];
 
                 $fullUrl = $url . '?' . http_build_query($params);
+                $this->stdout("  [API] GET {$fullUrl}\n", Console::FG_GREY);
                 $response = Yii::$app->wbHttpClient->get($fullUrl, [], $token, $companyId);
                 $httpCode = (int)$response->getStatusCode();
                 $content = $response->content;
@@ -456,12 +502,15 @@ class WbAutoReplyController extends Controller
                     }
                 }
 
+                $this->stdout("  [API] <- HTTP {$httpCode} " . substr((string)$content, 0, 1500) . "\n", $httpCode === 200 ? Console::FG_GREY : Console::FG_RED);
+
                 if ($httpCode !== 200 || !$data) {
                     $this->stderr("Ошибка синхронизации (isAnswered={$isAnswered}, skip={$skip}). HTTP: {$httpCode}\n", Console::FG_RED);
                     break;
                 }
                 $feedbacks = $data['data']['feedbacks'] ?? [];
                 $count = count($feedbacks);
+                $this->stdout("  [API] feedbacks в ответе: {$count} | countUnanswered=" . ($data['data']['countUnanswered'] ?? '?') . " countArchive=" . ($data['data']['countArchive'] ?? '?') . "\n", Console::FG_GREY);
 
                 if ($count === 0) {
                     break;
@@ -524,6 +573,121 @@ class WbAutoReplyController extends Controller
                 } else {
                     $skip += $take;
                 }
+            }
+        }
+    }
+
+    /**
+     * Синхронизация архивных отзывов за период.
+     * GET https://feedbacks-api.wildberries.ru/api/v1/feedbacks/archive?take=&skip=&order=
+     * Параметры nmId опциональны. Фильтр по дате локально по createdDate (как в WbFeedbacksController).
+     */
+    private function syncArchiveFeedbacks($companyId, $token, $startTimestamp, $endTimestamp)
+    {
+        $url = 'https://feedbacks-api.wildberries.ru/api/v1/feedbacks/archive';
+        $take = 500;
+        $skip = 0;
+        $hasMore = true;
+
+        while ($hasMore) {
+            $params = [
+                'take' => $take,
+                'skip' => $skip,
+                'order' => 'dateDesc',
+            ];
+            $fullUrl = $url . '?' . http_build_query($params);
+            $this->stdout("  [API-ARCHIVE] GET {$fullUrl}\n", Console::FG_GREY);
+            $response = Yii::$app->wbHttpClient->get($fullUrl, [], $token, $companyId);
+            $httpCode = (int)$response->getStatusCode();
+            $content = $response->content;
+            $data = $response->data;
+            if ($data === null && $content) {
+                try {
+                    $data = Json::decode($content);
+                } catch (\Throwable $e) {
+                    $data = null;
+                }
+            }
+
+            $this->stdout("  [API-ARCHIVE] <- HTTP {$httpCode} " . substr((string)$content, 0, 1500) . "\n", $httpCode === 200 ? Console::FG_GREY : Console::FG_RED);
+
+            if ($httpCode !== 200 || !$data) {
+                $this->stderr("Ошибка синхронизации архива (skip={$skip}). HTTP: {$httpCode}\n", Console::FG_RED);
+                break;
+            }
+
+            $feedbacks = $data['data']['feedbacks'] ?? [];
+            $count = count($feedbacks);
+            $this->stdout("  [API-ARCHIVE] feedbacks в ответе: {$count} | countUnanswered=" . ($data['data']['countUnanswered'] ?? '?') . " countArchive=" . ($data['data']['countArchive'] ?? '?') . "\n", Console::FG_GREY);
+            if ($count === 0) {
+                break;
+            }
+
+            $filtered = [];
+            $stopArchive = false;
+            foreach ($feedbacks as $fb) {
+                $fbTime = isset($fb['createdDate']) ? strtotime($fb['createdDate']) : 0;
+                if ($fbTime > $endTimestamp) {
+                    continue;
+                }
+                if ($fbTime >= $startTimestamp && $fbTime <= $endTimestamp) {
+                    $filtered[] = $fb;
+                }
+                if ($fbTime < $startTimestamp) {
+                    $stopArchive = true;
+                }
+            }
+
+            foreach ($filtered as $item) {
+                $id = $item['id'] ?? null;
+                if (!$id) continue;
+                $isPay = isset($item['isPay']) ? ($item['isPay'] ? 1 : 0) : 0;
+                $fCost = $item['fCost'] ?? $item['bableCost'] ?? null;
+
+                Yii::$app->db->createCommand()->upsert('wb_feedbacks', [
+                    'id' => $id,
+                    'company_id' => $companyId,
+                    'imtId' => $item['imtId'] ?? 0,
+                    'nmID' => $item['productDetails']['nmId'] ?? 0,
+                    'subjectId' => $item['subjectId'] ?? null,
+                    'subjectName' => $item['subjectName'] ?? null,
+                    'userName' => $item['userName'] ?? null,
+                    'matchingSize' => $item['matchingSize'] ?? null,
+                    'color' => $item['color'] ?? null,
+                    'text' => $item['text'] ?? null,
+                    'pros' => $item['pros'] ?? null,
+                    'cons' => $item['cons'] ?? null,
+                    'productValuation' => $item['productValuation'] ?? 0,
+                    'isNew' => isset($item['isNew']) ? ($item['isNew'] ? 1 : 0) : 1,
+                    'state' => $item['state'] ?? null,
+                    'status' => $item['status'] ?? null,
+                    'orderStatus' => $item['orderStatus'] ?? null,
+                    'is_pay' => $isPay,
+                    'f_cost' => $fCost,
+                    'is_archive' => 1,
+                    'createdDate' => isset($item['createdDate']) ? date('Y-m-d H:i:s', strtotime($item['createdDate'])) : date('Y-m-d H:i:s'),
+                    'updatedDate' => isset($item['updatedDate']) ? date('Y-m-d H:i:s', strtotime($item['updatedDate'])) : null,
+                    'productDetails' => Json::encode($item['productDetails'] ?? []),
+                    'photoLinks' => isset($item['photoLinks']) ? Json::encode($item['photoLinks']) : null,
+                    'video' => isset($item['video']) ? Json::encode($item['video']) : null,
+                    'answer' => isset($item['answer']) ? Json::encode($item['answer']) : null,
+                    'bables' => isset($item['bables']) ? Json::encode($item['bables']) : null,
+                    'created_at' => time(),
+                    'updated_at' => time(),
+                ], [
+                    'text' => $item['text'] ?? null,
+                    'pros' => $item['pros'] ?? null,
+                    'cons' => $item['cons'] ?? null,
+                    'productValuation' => $item['productValuation'] ?? 0,
+                    'answer' => isset($item['answer']) ? Json::encode($item['answer']) : null,
+                    'updated_at' => time(),
+                ])->execute();
+            }
+
+            if ($count < $take || $stopArchive) {
+                $hasMore = false;
+            } else {
+                $skip += $take;
             }
         }
     }

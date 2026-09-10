@@ -11,7 +11,7 @@ am5.ready(function() {
     rootTime.setThemes([am5themes_Animated.new(rootTime)]);
 
     // --- ЛИНЕЙНЫЙ ГРАФИК ---
-    var data = <?= $timelineJson ?>;
+    var data = <?= $timelineJson ?: '[]' ?>;
 
     CTRLinechart = rootTime.container.children.push(am5xy.XYChart.new(rootTime, {
         panX: true,

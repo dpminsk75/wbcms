@@ -104,11 +104,13 @@ class WbGetSalesFunnelController extends Controller
 
     public function actionSyncMissing()
     {
-    set_time_limit(3600); 
-    $api = new WbApi();
-    
-    $dateFrom = date('Y-m-d', strtotime('-7 days'));
-    $dateTo = date('Y-m-d');
+        set_time_limit(3600);
+        // Снимаем lock сессии — иначе второй таб висит пока идёт sleep(15) × чанки (как в CompetitorController:641)
+        if (Yii::$app->session->isActive) Yii::$app->session->close();
+        $api = new WbApi();
+
+        $dateFrom = date('Y-m-d', strtotime('-7 days'));
+        $dateTo = date('Y-m-d');
 
         $missingNmIds = WbCard::find()
             ->select('wbcards.nmId')
@@ -159,7 +161,8 @@ class WbGetSalesFunnelController extends Controller
     {
         // Увеличиваем лимит времени, так как 15 секунд паузы между пачками
         // при большом количестве товаров потребуют много времени
-        set_time_limit(3600); 
+        set_time_limit(3600);
+        if (Yii::$app->session->isActive) Yii::$app->session->close();
         $api = new WbApi();
         
         $dateFrom = date('Y-m-d', strtotime('-7 days'));

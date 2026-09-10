@@ -20,7 +20,7 @@ am5.ready(function() {
       numericSymbols: []        // Отключает сокращения типа "k", "M" (если они не нужны)
     });
 
-    var data = <?= $statsJson ?>;
+    var data = <?= $statsJson ?: '[]' ?>;
     var appTypes = [32, 64, 1];
 /*
     var appNames = {
