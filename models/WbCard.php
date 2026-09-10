@@ -71,10 +71,16 @@ class WbCard extends ActiveRecord
 
     public static function getListForSelect()
     {
-        return self::find()
-            ->select(["CONCAT(nmID, ' | ', title, ' (', vendorCode, ')') as label", 'nmId'])
-            ->indexBy('nmId')
-            ->column();
+        try {
+            return self::find()
+                ->select(["CONCAT(nmID, ' | ', COALESCE(title,''), ' (', COALESCE(vendorCode,''), ')') as label", 'nmID'])
+                ->indexBy('nmID')
+                ->orderBy(['nmID' => SORT_DESC])
+                ->column();
+        } catch (\Throwable $e) {
+            \Yii::error('getListForSelect failed: ' . $e->getMessage(), __METHOD__);
+            return [];
+        }
     }
     public function getDimensions($separator = ' × ')
     {

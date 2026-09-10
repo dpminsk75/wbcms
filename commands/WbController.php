@@ -64,7 +64,7 @@ class WbController extends Controller
             // WB больше не вернул (не удаляем их, а помечаем is_active = 0).
             $syncStartedAt = date('Y-m-d H:i:s');
 
-            $limit = 500;
+            $limit = 100; // док WB: максимум 100, пагинация по cursor.updatedAt+nmID, стоп когда total < limit
             $cursorUpdatedAt = null;
             $cursorNmID = null;
             $totalFetched = 0;

@@ -55,6 +55,7 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
     <?php endif; ?>
 <?php endif; ?>
 
+<?php if (!empty($card)): /* не вызываем остатки/логистику пока не выбран товар */ ?>
 <?php /* остатки */
     $totals = WbStocks::getTotalStats($nmId);
 
@@ -286,6 +287,7 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
                 <div class="alert alert-light border" style="margin-top: 10px; font-size: 12px;">Нет данных о платном хранении за период.</div>
                 <?php endif; ?>
             <?php endif; ?>
+<?php endif; // card - остатки/хранение ?>
 
         </div>
         <div class="col-md-6">
@@ -352,6 +354,9 @@ $myButtons = \app\components\AdminQuickButtons::getButtons();
             <?php endif; ?>
         </div>
     </div>
+<?php if (empty($card)): ?>
+<div class="alert alert-info mt-2"><i class="bi bi-info-circle"></i> Выберите карточку WB выше, чтобы увидеть остатки, воронку, графики и аналитику по товару.</div>
+<?php endif; ?>
 
 <?php if (!empty($OrderFunnel)): ?>
     <div class="row mb-3">
@@ -884,13 +889,14 @@ $this->registerJsFile('https://cdn.amcharts.com/lib/5/locales/ru_RU.js', [
 <script>
 var YearLineChart;
 am5.ready(function() {
+    var chartData = <?= json_encode($ChartformattedData, JSON_UNESCAPED_UNICODE) ?: '{}' ?>;
+    var _ylEl = document.getElementById('yearline_div');
+    if (!_ylEl || !chartData || Object.keys(chartData).length === 0) return;
 
     // Создаем корневой элемент
     var YearLineRoot = am5.Root.new("yearline_div");
     YearLineRoot.locale = am5locales_ru_RU; 
     YearLineRoot.setThemes([am5themes_Animated.new(YearLineRoot)]);
-
-    var chartData = <?= json_encode($ChartformattedData) ?>;
 
     // Создаем сам график
     YearLineChart = YearLineRoot.container.children.push(am5xy.XYChart.new(YearLineRoot, {

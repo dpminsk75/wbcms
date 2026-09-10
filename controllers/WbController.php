@@ -363,6 +363,7 @@ class WbController extends Controller
         $ChartformattedData = [];
 
         $WeeklyFinanceProvider = new \yii\data\ArrayDataProvider(['allModels' => []]); 
+        $paidStorageProvider = new \yii\data\ArrayDataProvider(['allModels' => []]);
         $phraseDataProvider = new \yii\data\ArrayDataProvider(['allModels' => []]); 
         $uniqueDates = [];
 
