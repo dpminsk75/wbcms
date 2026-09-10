@@ -1,9 +1,17 @@
 <?php
 use yii\helpers\Html;
+use kartik\icons\Icon;
+use yii\bootstrap5\BootstrapIconAsset;
 use yii\widgets\ActiveForm;
 use yii\helpers\Url;
 
+Icon::map($this);
+BootstrapIconAsset::register($this);
+
 /** @var app\models\WbDoc $model */
+Icon::map($this);
+BootstrapIconAsset::register($this);
+
 /** @var app\models\OurWarehouse[] $warehouses */
 $isTransfer = $model->type === \app\models\WbDoc::TYPE_TRANSFER;
 $isInventory = $model->type === \app\models\WbDoc::TYPE_INVENTORY;
@@ -71,30 +79,32 @@ foreach ($model->items as $it) {
             </div>
         </div>
         <div class="col-md-6 d-flex flex-column gap-2 justify-content-start">
-            <div class="dropdown w-100">
-                <button class="btn btn-success btn-sm dropdown-toggle py-2 px-3 w-100" type="button" id="importDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false">
-                    <div class="d-inline-flex align-items-center gap-2">
-                        <span class="me-2"><i class="fas fa-file-excel me-1"></i> Действия с Excel</span>
-                        <i class="fas fa-chevron-down small"></i>
-                    </div>
-                </button>
-                <ul class="dropdown-menu w-100" aria-labelledby="importDropdownBtn">
-                    <li><button class="dropdown-item" type="button" id="import-doc-btn"><i class="fas fa-file-upload me-2"></i>Загрузить из Excel</button></li>
-                    <li><button class="dropdown-item" type="button" id="export-spec-btn"><i class="fas fa-file-download me-2 text-success"></i>Сохранить в Excel</button></li>
-                    <?php if($isInventory): ?>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><button class="dropdown-item" type="button" id="fill-inventory-btn"><i class="fas fa-database me-2"></i>Заполнить остатками (все)</button></li>
-                    <li><button class="dropdown-item" type="button" id="fill-by-vendor-btn"><i class="fas fa-list-check me-2"></i>Заполнить строки (по vendorCode)</button></li>
-                    <?php endif; ?>
-                </ul>
+            <div class="d-flex flex-row gap-2 align-items-center">
+                <div class="dropdown flex-shrink-0">
+                    <button class="btn btn-success btn-sm dropdown-toggle py-2 px-3" type="button" id="importDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="d-inline-flex align-items-center gap-2">
+                            <span class="me-2"><i class="fas fa-file-excel me-1"></i> Действия с Excel</span>
+                            <i class="fas fa-chevron-down small"></i>
+                        </div>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="importDropdownBtn">
+                        <li><button class="dropdown-item" type="button" id="import-doc-btn"><i class="fas fa-file-upload me-2"></i>Загрузить из Excel</button></li>
+                        <li><button class="dropdown-item" type="button" id="export-spec-btn"><i class="fas fa-file-download me-2 text-success"></i>Сохранить в Excel</button></li>
+                        <?php if($isInventory): ?>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><button class="dropdown-item" type="button" id="fill-inventory-btn"><i class="fas fa-database me-2"></i>Заполнить остатками (все)</button></li>
+                        <li><button class="dropdown-item" type="button" id="fill-by-vendor-btn"><i class="fas fa-list-check me-2"></i>Заполнить строки (по vendorCode)</button></li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+                <div id="doc-totals" class="alert alert-light border py-2 small mb-0 flex-grow-1">
+                    Строк: <b id="total-rows">0</b> &nbsp;|&nbsp; Общее количество: <b id="total-qty">0</b>
+                    <span id="total-delta-wrap" style="display:none"> &nbsp;|&nbsp; Разница: <b id="total-delta">0</b></span>
+                </div>
             </div>
             <?php if($isInventory): ?>
             <button type="button" class="btn btn-outline-primary btn-sm w-100" id="fill-by-vendor-btn2"><i class="fas fa-list-check me-1"></i> Заполнить строки по vendorCode</button>
             <?php endif; ?>
-            <div id="doc-totals" class="alert alert-light border py-2 small mb-0">
-                Строк: <b id="total-rows">0</b> &nbsp;|&nbsp; Общее количество: <b id="total-qty">0</b>
-                <span id="total-delta-wrap" style="display:none"> &nbsp;|&nbsp; Разница: <b id="total-delta">0</b></span>
-            </div>
         </div>
     </div>
     <input type="file" id="import-doc-file" accept=".xlsx,.xls" style="display:none">

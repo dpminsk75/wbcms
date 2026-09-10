@@ -1,5 +1,10 @@
 <?php
 use yii\helpers\Html;
+use kartik\icons\Icon;
+use yii\bootstrap5\BootstrapIconAsset;
+Icon::map($this);
+BootstrapIconAsset::register($this);
+
 /** @var app\models\WbDoc $model */
 $wh = \app\models\OurWarehouse::findOne((int)$model->warehouseId);
 $whName = $wh ? $wh->name : '#'.$model->warehouseId;

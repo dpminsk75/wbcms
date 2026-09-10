@@ -1,9 +1,15 @@
 <?php
 use yii\helpers\Html;
+use kartik\icons\Icon;
+use yii\bootstrap5\BootstrapIconAsset;
 use kartik\grid\GridView;
+
+Icon::map($this);
+BootstrapIconAsset::register($this);
 
 /** @var app\models\WbDoc $model */
 /** @var array $itemsRaw */
+
 /** @var yii\data\ArrayDataProvider $dataProvider */
 $this->title = 'Документ #'.$model->id.' '.$model->type.' '.$model->status;
 $this->params['breadcrumbs'][] = ['label'=>'Документы','url'=>['index']];
@@ -22,24 +28,31 @@ $isTransfer = $model->type === \app\models\WbDoc::TYPE_TRANSFER;
 ?>
 <div class="wb-doc-view">
     <h1><?= Html::encode('Документ #'.$model->id.' '.$typeLabel.' — '.$model->status) ?></h1>
-    <p>
+    <p class="d-flex gap-2 flex-wrap align-items-center">
         <?php if ($model->status==='draft'): ?>
-            <?= Html::a('Провести', ['post','id'=>$model->id], ['class'=>'btn btn-success','data-method'=>'post','data-confirm'=>'Провести? Остатки изменятся']) ?>
-            <?= Html::a('Редактировать', ['update','id'=>$model->id], ['class'=>'btn btn-warning']) ?>
-            <?= Html::a('Удалить', ['delete','id'=>$model->id], ['class'=>'btn btn-danger','data-method'=>'post','data-confirm'=>'Удалить черновик?']) ?>
+            <?= Html::a('Провести', ['post','id'=>$model->id], ['class'=>'btn btn-success btn-sm py-2 px-3','data-method'=>'post','data-confirm'=>'Провести? Остатки изменятся']) ?>
+            <?= Html::a('Редактировать', ['update','id'=>$model->id], ['class'=>'btn btn-warning btn-sm py-2 px-3']) ?>
+            <?= Html::a('Удалить', ['delete','id'=>$model->id], ['class'=>'btn btn-danger btn-sm py-2 px-3','data-method'=>'post','data-confirm'=>'Удалить черновик?']) ?>
         <?php endif; ?>
         <?php if ($model->status==='posted'): ?>
-            <?= Html::a('Отменить (сторно)', ['cancel','id'=>$model->id], ['class'=>'btn btn-warning','data-method'=>'post','data-confirm'=>'Отменить? Создаст сторно']) ?>
+            <?= Html::a('Отменить (сторно)', ['cancel','id'=>$model->id], ['class'=>'btn btn-warning btn-sm py-2 px-3','data-method'=>'post','data-confirm'=>'Отменить? Создаст сторно']) ?>
         <?php endif; ?>
         <?php if ($model->status==='canceled'): ?>
-            <?= Html::a('Редактировать (вернет в черновик)', ['update','id'=>$model->id], ['class'=>'btn btn-warning']) ?>
-            <?= Html::a('Удалить', ['delete','id'=>$model->id], ['class'=>'btn btn-danger','data-method'=>'post','data-confirm'=>'Удалить отмененный документ?']) ?>
+            <?= Html::a('Редактировать (вернет в черновик)', ['update','id'=>$model->id], ['class'=>'btn btn-warning btn-sm py-2 px-3']) ?>
+            <?= Html::a('Удалить', ['delete','id'=>$model->id], ['class'=>'btn btn-danger btn-sm py-2 px-3','data-method'=>'post','data-confirm'=>'Удалить отмененный документ?']) ?>
         <?php endif; ?>
         <?php if($isInventory): ?>
-            <?= Html::a('Печать акта', ['print','id'=>$model->id], ['class'=>'btn btn-info','target'=>'_blank']) ?>
+            <?= Html::a('Печать акта', ['print','id'=>$model->id], ['class'=>'btn btn-info btn-sm py-2 px-3','target'=>'_blank']) ?>
         <?php endif; ?>
-        <?= Html::button('<i class="fas fa-file-excel me-1"></i> Сохранить в Excel', ['class'=>'btn btn-success btn-sm','id'=>'export-view-btn']) ?>
-        <?= Html::a('Назад', ['index'], ['class'=>'btn btn-default']) ?>
+        <div class="dropdown d-inline-block">
+            <button class="btn btn-success btn-sm dropdown-toggle py-2 px-3" type="button" id="viewExcelDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <div class="d-inline-flex align-items-center gap-2"><span class="me-2"><i class="fas fa-file-excel me-1"></i> Действия с Excel</span><i class="fas fa-chevron-down small"></i></div>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="viewExcelDropdown">
+                <li><button class="dropdown-item" type="button" id="export-view-btn"><i class="fas fa-file-download me-2 text-success"></i>Сохранить в Excel</button></li>
+            </ul>
+        </div>
+        <?= Html::a('Назад', ['index'], ['class'=>'btn btn-outline-secondary btn-sm py-2 px-3']) ?>
     </p>
     <table class="table table-bordered" style="max-width:700px">
         <tr><th>Тип</th><td><?= Html::encode($typeLabel) ?> (<?= Html::encode($model->type) ?>)</td></tr>
@@ -139,9 +152,9 @@ $isTransfer = $model->type === \app\models\WbDoc::TYPE_TRANSFER;
     <div class="custom-compact-grid">
     <?= GridView::widget([
         'dataProvider'=>$dataProvider,
-        'id'=>'view-spec-grid',
         'pjax'=>false,
-        'bordered'=>true,'striped'=>true,'condensed'=>true,'hover'=>true,'responsive'=>true,'responsiveWrap'=>false,
+        'bordered'=>true,'striped'=>true,'condensed'=>true,'hover'=>true,
+        'toolbar'=>['{export}'],
         'panel'=>[
             'type'=>GridView::TYPE_PRIMARY,
             'heading'=>'Состав — '.count($itemsRaw).' поз.',
@@ -149,13 +162,13 @@ $isTransfer = $model->type === \app\models\WbDoc::TYPE_TRANSFER;
             'before'=>false,
             'after'=>false,
         ],
-        'toolbar'=>['{export}'],
-        'export'=>[
-            'showConfirmAlert'=>false,
-            'target'=>GridView::TARGET_BLANK,
+        'export' => [
+            'showConfirmAlert' => false,
+            'target' => GridView::TARGET_BLANK,
+            'batchSize' => 1000,
         ],
-        'exportConfig'=>[
-            GridView::EXCEL=>['label'=>'Сохранить в Excel'],
+        'exportConfig' => [
+            GridView::EXCEL => ['label' => 'Сохранить в Excel'],
         ],
         'columns'=>$cols,
     ]) ?>

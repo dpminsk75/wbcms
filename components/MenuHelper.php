@@ -170,6 +170,11 @@ class MenuHelper
                 ['label' => 'Управление остатками', 'url' => ['/wb-fbs-virtual/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
                 ['label' => 'Документы', 'url' => ['/wb-doc/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
                 ['label' => 'Склады', 'url' => ['/our-warehouse/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
+                ['label' => 'Наличие', 'url' => ['/wb-doc-report/balance'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                ['label' => 'Оборотная ведомость', 'url' => ['/wb-doc-report/turnover'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                ['label' => 'Карточка товара', 'url' => ['/wb-doc-report/card'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                ['label' => 'Неликвиды', 'url' => ['/wb-doc-report/nonliquid'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
             ],
         ],
 
