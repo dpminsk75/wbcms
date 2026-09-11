@@ -176,316 +176,256 @@ public function actionIndexDashboard($dateFrom = null, $dateTo = null)
 
 protected function renderDashboard($dateFrom = null, $dateTo = null)
 {
-    // Установка дат по умолчанию
+    // SHELL: только даты, тяжелые данные грузятся через AJAX-слоты
     $dateFrom = $dateFrom ?: date('Y-m-d', strtotime('-3 days'));
     $dateTo = $dateTo ?: date('Y-m-d');
-
-    $date_from = $dateFrom . ' 00:00:00';
-    $date_to   = $dateTo   . ' 23:59:59';
-    $cm = Yii::$app->companyManager;
-
-    $advQuery = (new \yii\db\Query())
-        ->select([
-            'campaign_id' => 'c.campaign_id', 
-            'name'        => 'c.name', 
-            'status'      => 'c.status',
-
-        'status_priority' => new \yii\db\Expression("
-            CASE 
-                WHEN c.status = 9 THEN 1 
-                WHEN c.status = 11 THEN 2 
-                WHEN c.status = 7 THEN 4
-                WHEN c.status = 4 THEN 5 
-                WHEN c.status = -1 THEN 6 
-                ELSE 5 
-            END
-        "),
-
-            'views'       => 'SUM(n.views)',
-            'clicks'      => 'SUM(n.clicks)',
-            'atbs'        => 'SUM(n.atbs)',
-            'orders'      => 'SUM(n.orders)',
-            'shks'        => 'SUM(n.shks)',
-            'sum'         => 'SUM(n.sum)',
-            'sum_price'   => 'SUM(n.sum_price)',
-            'canceled'    => 'SUM(n.canceled)',
-        ])
-        ->from(['c' => 'wb_campaign'])
-        ->innerJoin(['i' => 'wb_campaign_item'], 'c.campaign_id = i.campaign_id')
-        ->innerJoin(['s' => 'wb_campaign_stats'], 'c.campaign_id = s.campaign_id')
-        ->innerJoin(['n' => 'wb_campaign_stats_nms'], 's.id = n.parent_id AND i.nm_id = n.nm_id')
-        ->innerJoin(['w' => 'wbcards'], 'n.nm_id = w.nmID') // Учтено из ваших инструкций
-        ->where(['between', 's.date', $date_from, $date_to])
-        ->groupBy(['c.campaign_id', 'c.name', 'c.status'])
-        ->orderBy(['c.status' => SORT_ASC]);
-    $cm->applyToQuery($advQuery, 'c');
-    $advData = $advQuery->all();
-
-    $lastOrdersQuery = (new \yii\db\Query())
-        ->select([
-            'title'        => 'c.title',
-            'nm_id'         => 'c.nmID',
-            'vendorCode'   => 'c.vendorCode',
-            'cnt'          => 'COUNT(o.nm_id)',
-
-            'cnt_0' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() THEN 1 ELSE 0 END)"),
-            'cnt_1' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 1 ELSE 0 END)"),
-            'cnt_2' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 2 DAY) THEN 1 ELSE 0 END)"),
-            'cnt_3' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 3 DAY) THEN 1 ELSE 0 END)"),
-
-            'pwd'          => 'SUM(o.price_with_disc)',
-            'fp'           => 'SUM(o.finished_price)',
-            'apwd'         => 'AVG(o.price_with_disc)',
-            'aspp'         => 'AVG(o.spp)',
-            'afp'          => 'AVG(o.finished_price)',
-        ])
-        ->from(['o' => 'wb_order'])
-        ->innerJoin(['c' => 'wbcards'], 'o.nm_id = c.nmID') // Используем c.nmID по инструкции
-        ->where(['between', 'o.date', $date_from, $date_to])
-        ->groupBy(['c.title', 'c.nmID', 'c.vendorCode'])
-        ->orderBy(['cnt' => SORT_DESC]);
-    $cm->applyToQuery($lastOrdersQuery, 'o');
-    $LastOrders = $lastOrdersQuery->all();
-
-    $lastSalesQuery = (new \yii\db\Query())
-        ->select([
-            'title'        => 'c.title',
-            'nm_id'         => 'c.nmID',
-            'vendorCode'   => 'c.vendorCode',
-            // Агрегаты: Количество и Суммы
-            'cnt'         => 'COUNT(o.nmId)',
-            
-            'cnt_0' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() THEN 1 ELSE 0 END)"),
-            'cnt_1' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 1 ELSE 0 END)"),
-            'cnt_2' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 2 DAY) THEN 1 ELSE 0 END)"),
-            'cnt_3' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 3 DAY) THEN 1 ELSE 0 END)"),
-
-            'tp'          => 'SUM(o.totalPrice)',
-            'pwd'         => 'SUM(o.priceWithDisc)',
-            'fp'          => 'SUM(o.finishedPrice)',
-            'forpay'      => 'SUM(o.forPay)',
-            // Агрегаты: Средние значения
-            'adp'         => 'AVG(o.discountPercent)',
-            'aspp'        => 'AVG(o.spp)',
-            'apwd'        => 'AVG(o.priceWithDisc)',
-            'afp'         => 'AVG(o.finishedPrice)',
-            'aforpay'     => 'AVG(o.forPay)',
-        ])
-        ->from(['o' => 'wb_sales'])
-        ->innerJoin(['c' => 'wbcards'], 'o.nmId = c.nmID') // Связь по nmID
-        ->where(['between', 'o.date', $date_from, $date_to])
-        ->groupBy(['c.title', 'c.nmID', 'c.vendorCode'])
-        ->orderBy(['cnt' => SORT_DESC]);
-    $cm->applyToQuery($lastSalesQuery, 'o');
-    $LastSales = $lastSalesQuery->all();
-/*
-        'sort' => [
-            'attributes' => ['views', 'clicks', 'sum', 'orders', 'status'],
-            'defaultOrder' => ['sum' => SORT_DESC], // Сортируем по сумме трат по умолчанию
-        ],
-*/
-
-// --- НАЧАЛО НОВОГО БЛОКА: Сводные данные по заказам (UNION) ---
-    $qTotalPrice = (new \yii\db\Query())
-        ->select([
-            'price_type'   => new Expression("'Без скидок'"),
-            'ieri'         => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 1 DAY THEN total_price ELSE 0 END)"),
-            'pazyera'      => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 2 DAY THEN total_price ELSE 0 END)"),
-            'past_7_days'  => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 7 DAY AND date < CURDATE() THEN total_price ELSE 0 END)"),
-            'week_before'  => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 14 DAY AND date < CURDATE() - INTERVAL 7 DAY THEN total_price ELSE 0 END)"),
-            'past_30_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 30 DAY AND date < CURDATE() THEN total_price ELSE 0 END)"),
-        ])
-        ->from('wb_order')
-        ->where(['>=', 'date', new Expression('CURDATE() - INTERVAL 30 DAY')]);
-    $cm->applyToQuery($qTotalPrice, '');
-
-    $qPriceWithDisc = (new \yii\db\Query())
-        ->select([
-            'price_type'   => new Expression("'Цена со скидкой'"),
-            'ieri'         => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 1 DAY THEN price_with_disc ELSE 0 END)"),
-            'pazyera'      => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 2 DAY THEN price_with_disc ELSE 0 END)"),
-            'past_7_days'  => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 7 DAY AND date < CURDATE() THEN price_with_disc ELSE 0 END)"),
-            'week_before'  => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 14 DAY AND date < CURDATE() - INTERVAL 7 DAY THEN price_with_disc ELSE 0 END)"),
-            'past_30_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 30 DAY AND date < CURDATE() THEN price_with_disc ELSE 0 END)"),
-        ])
-        ->from('wb_order')
-        ->where(['>=', 'date', new Expression('CURDATE() - INTERVAL 30 DAY')]);
-    $cm->applyToQuery($qPriceWithDisc, '');
-
-    $qFinishedPrice = (new \yii\db\Query())
-        ->select([
-            'price_type'   => new Expression("'Цена в заказе'"),
-            'ieri'         => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 1 DAY THEN finished_price ELSE 0 END)"),
-            'pazyera'      => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 2 DAY THEN finished_price ELSE 0 END)"),
-            'past_7_days'  => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 7 DAY AND date < CURDATE() THEN finished_price ELSE 0 END)"),
-            'week_before'  => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 14 DAY AND date < CURDATE() - INTERVAL 7 DAY THEN finished_price ELSE 0 END)"),
-            'past_30_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 30 DAY AND date < CURDATE() THEN finished_price ELSE 0 END)"),
-        ])
-        ->from('wb_order')
-        ->where(['>=', 'date', new Expression('CURDATE() - INTERVAL 30 DAY')]);
-    $cm->applyToQuery($qFinishedPrice, '');
-
-    $qCountOrders = (new \yii\db\Query())
-        ->select([
-            'price_type' => new Expression("'Количество заказов'"),
-            'ieri'         => new Expression("COUNT(CASE WHEN DATE(date) = CURDATE() - INTERVAL 1 DAY THEN 1 END)"),
-            'pazyera'      => new Expression("COUNT(CASE WHEN DATE(date) = CURDATE() - INTERVAL 2 DAY THEN 1 END)"),
-            'past_7_days'  => new Expression("COUNT(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 7 DAY AND date < CURDATE() THEN 1 END)"),
-            'week_before'  => new Expression("COUNT(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 14 DAY AND date < CURDATE() - INTERVAL 7 DAY THEN 1 END)"),
-            'past_30_days' => new Expression("COUNT(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 30 DAY AND date < CURDATE() THEN 1 END)"),
-        ])
-        ->from('wb_order')
-        ->where(['>=', 'date', new Expression('CURDATE() - INTERVAL 30 DAY')]);
-    $cm->applyToQuery($qCountOrders, '');
-
-    // Объединяем запросы через UNION ALL
-    $ordersSummary = $qCountOrders
-        ->union($qTotalPrice, true)
-        ->union($qPriceWithDisc, true)
-        ->union($qFinishedPrice, true)
-        ->all();
-
-    $AdvProvider = new \yii\data\ArrayDataProvider([
-        'allModels' => $advData,
-        'sort' => [
-            'attributes' => ['status','name','status_priority',],
-            'defaultOrder' => [
-                'status_priority' => SORT_ASC, 
-                'name' => SORT_ASC
-            ],
-        ],
-        'pagination' => [
-            'pageSize' => 10,
-        ],
-    ]);
-
-    $LastOrdersProvider = new \yii\data\ArrayDataProvider([
-        'allModels' => $LastOrders,
-        'pagination' => [
-            'pageSize' => 10,
-        ],
-        'sort' => [
-            'attributes' => ['cnt', 'title'],
-            'defaultOrder' => ['cnt' => SORT_DESC]
-        ],
-    ]);
-
-
-    $LastSalesProvider = new \yii\data\ArrayDataProvider([
-        'allModels' => $LastSales,
-        'sort' => [
-            'attributes' => ['cnt', 'title'],
-            'defaultOrder' => ['cnt' => SORT_DESC],
-        ],
-        'pagination' => [
-            'pageSize' => 15,
-        ],
-    ]);
-
-    $OrdersSummaryProvider = new \yii\data\ArrayDataProvider([
-        'allModels' => $ordersSummary,
-        'pagination' => false, // Таблица маленькая (всего 3 строки), пагинация не нужна
-    ]);
-
-    if (Yii::$app->request->get('refresh') == 1) {
-        Yii::$app->cache->delete('monthly_finance_dashboard_data');
-    }
-
-    $targetTimeToday = strtotime('today 10:00:00');
-    if (time() < $targetTimeToday) {
-        // Если еще нет 10 утра, кэшируем до 10:00 сегодня
-        $secondsLeftTo10AM = $targetTimeToday - time();
-    } else {
-        // Если 10 утра уже прошло, кэшируем до 10:00 завтра
-        $secondsLeftTo10AM = strtotime('tomorrow 10:00:00') - time();
-    }
-
-// === ДАННЫЕ ДЛЯ ТОП-БЛОКА (45 ДНЕЙ): ГРАФИК И KPI ===
-    $date45DaysAgo = date('Y-m-d', strtotime('-30 days'));
-    $dateYestoday = date('Y-m-d', strtotime('-1 days'));
-    $dateToday = date('Y-m-d');
-
-// Посуточные данные для Stacked Bar графика amCharts 5
-    $chart45Query = (new \yii\db\Query()) 
-        ->select([
-            'date'       => 'sdate',
-            'amount'     => 'SUM(amount)',
-            'net_profit' => 'SUM(net_profit)',
-            'qnt'        => 'SUM(qnt)',
-
-
-            'total_expenses'   => 'SUM(commission) + SUM(f_acquiring_fee) + SUM(f_acceptance) + SUM(f_delivery) + SUM(f_storage_fee) + SUM(f_penalty) + SUM(f_deduction) + SUM(f_otziv) + SUM(f_adv) + SUM(f_cashback)',
-            'total_nds'        => 'SUM(f_nds)',
-            'total_cost'       => 'SUM(f_cost_price)',
-            'tax_amount'       => '(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) * 0.07',
-            'clean_margin'     => '(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) - (GREATEST(0, SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) * 0.07)'
-
-        ])
-        ->from('agg_daily_summary')
-        ->where(['between', 'sdate', $date45DaysAgo, $dateYestoday])
-        ->groupBy('sdate')
-        ->orderBy(['sdate' => SORT_ASC]);
-    $cm->applyToQuery($chart45Query, '');
-    $chart45Data = $chart45Query->all();
-
-    // Суммарные KPI показатели для плашек за 45 дней
-    $kpi45Query = (new \yii\db\Query())
-        ->select([
-            'total_sales_rub'  => 'SUM(amount)',
-            'total_return_rub' => 'SUM(`return`)',
-            'total_profit_rub' => 'SUM(net_profit)',
-            'total_expenses'   => 'SUM(commission) + SUM(f_acquiring_fee) + SUM(f_acceptance) + SUM(f_delivery) + SUM(f_storage_fee) + SUM(f_penalty) + SUM(f_deduction) + SUM(f_otziv) + SUM(f_adv) + SUM(f_cashback)',
-
-            'total_delivery'   => 'SUM(f_delivery)',
-            'total_adv'        => 'SUM(f_adv)',
-            'total_cashback'   => 'SUM(f_cashback)',
-
-                'total_nds'         => 'SUM(f_nds)',
-                'total_cost'        => 'SUM(f_cost_price)',
-                'profit_before_tax' => 'SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)',
-                'tax_amount'        => '(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) * 0.07',
-                'clean_margin'      => '(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) - (GREATEST(0, SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) * 0.07)'
-
-        ])
-        ->from('agg_daily_summary')
-        ->where(['between', 'sdate', $date45DaysAgo, $dateYestoday]);
-    $cm->applyToQuery($kpi45Query, '');
-    $kpi45Data = $kpi45Query->one();
-
-    // Количество заказов за 45 дней (из специализированного агрегата или таблицы заказов)
-    $kpi45OrdersQuery = (new \yii\db\Query())
-        ->from('wb_order')
-        ->where(['between', 'date', $date45DaysAgo . ' 00:00:00', $dateYestoday . ' 23:59:59']);
-    $cm->applyToQuery($kpi45OrdersQuery, '');
-    $kpi45Orders = $kpi45OrdersQuery->count();
-        
-    $kpi45Data['total_orders_cnt'] = $kpi45Orders;
-
-
-    $ProfitService = new \app\components\WbProfitService();
-
-    // === ДАННЫЕ ДЛЯ ВИДЖЕТА "Заказы/Выкупы" (только для админа) ===
-    // Первая загрузка страницы сразу считает период "today" — тем же кодом,
-    // что и AJAX-экшен ниже, чтобы не дублировать логику в двух местах.
-    $todayStats = [
-        'period' => 'today',
-        'orders' => $this->buildPeriodStats('today', 'wb_order', 'price_with_disc'),
-        'sales'  => $this->buildPeriodStats('today', 'wb_sales', 'priceWithDisc'),
-    ];
-
     return $this->render('index_dashboard', [
-        'AdvProvider' => $AdvProvider,
-        'LastOrdersProvider' => $LastOrdersProvider,
-        'LastSalesProvider' => $LastSalesProvider,
-        'OrdersSummaryProvider' => $OrdersSummaryProvider,
-        'MonthlyFinanceProvider' => $ProfitService->getMonthlyProfitProvider(),
-        'chart45Data' => $chart45Data,
-        'kpi45Data'   => $kpi45Data,
-        'todayStats'  => $todayStats,
         'dateFrom' => $dateFrom,
         'dateTo' => $dateTo,
     ]);
-} //actionIndexDashboard
+}
+
+    // ===== AJAX-слоты дашборда =====
+    public function actionDashboardTopMetrics($dateFrom = null, $dateTo = null)
+    {
+        if (Yii::$app->user->isGuest) throw new \yii\web\ForbiddenHttpException('Требуется вход.');
+        $date45DaysAgo = date('Y-m-d', strtotime('-30 days'));
+        $dateYestoday = date('Y-m-d', strtotime('-1 days'));
+        $cm = Yii::$app->companyManager;
+        $chart45Query = (new \yii\db\Query())
+            ->select([
+                'date' => 'sdate',
+                'amount' => 'SUM(amount)',
+                'net_profit' => 'SUM(net_profit)',
+                'qnt' => 'SUM(qnt)',
+                'total_expenses' => 'SUM(commission) + SUM(f_acquiring_fee) + SUM(f_acceptance) + SUM(f_delivery) + SUM(f_storage_fee) + SUM(f_penalty) + SUM(f_deduction) + SUM(f_otziv) + SUM(f_adv) + SUM(f_cashback)',
+                'total_nds' => 'SUM(f_nds)',
+                'total_cost' => 'SUM(f_cost_price)',
+                'tax_amount' => '(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) * 0.07',
+                'clean_margin' => '(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) - (GREATEST(0, SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) * 0.07)'
+            ])
+            ->from('agg_daily_summary')
+            ->where(['between', 'sdate', $date45DaysAgo, $dateYestoday])
+            ->groupBy('sdate')
+            ->orderBy(['sdate' => SORT_ASC]);
+        $cm->applyToQuery($chart45Query, '');
+        $chart45Data = $chart45Query->all();
+        $kpi45Query = (new \yii\db\Query())
+            ->select([
+                'total_sales_rub' => 'SUM(amount)',
+                'total_return_rub' => 'SUM(`return`)',
+                'total_profit_rub' => 'SUM(net_profit)',
+                'total_expenses' => 'SUM(commission) + SUM(f_acquiring_fee) + SUM(f_acceptance) + SUM(f_delivery) + SUM(f_storage_fee) + SUM(f_penalty) + SUM(f_deduction) + SUM(f_otziv) + SUM(f_adv) + SUM(f_cashback)',
+                'total_delivery' => 'SUM(f_delivery)',
+                'total_adv' => 'SUM(f_adv)',
+                'total_cashback' => 'SUM(f_cashback)',
+                'total_nds' => 'SUM(f_nds)',
+                'total_cost' => 'SUM(f_cost_price)',
+                'profit_before_tax' => 'SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)',
+                'tax_amount' => '(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) * 0.07',
+                'clean_margin' => '(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) - (GREATEST(0, SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)) * 0.07)'
+            ])
+            ->from('agg_daily_summary')
+            ->where(['between', 'sdate', $date45DaysAgo, $dateYestoday]);
+        $cm->applyToQuery($kpi45Query, '');
+        $kpi45Data = $kpi45Query->one();
+        $kpi45OrdersQuery = (new \yii\db\Query())->from('wb_order')->where(['between', 'date', $date45DaysAgo . ' 00:00:00', $dateYestoday . ' 23:59:59']);
+        $cm->applyToQuery($kpi45OrdersQuery, '');
+        $kpi45Data['total_orders_cnt'] = $kpi45OrdersQuery->count();
+        return $this->renderAjax('include/_dashboard_top_metrics', ['chart45Data' => $chart45Data, 'kpi45Data' => $kpi45Data]);
+    }
+
+    public function actionDashboardAdv($dateFrom = null, $dateTo = null)
+    {
+        if (Yii::$app->user->isGuest) throw new \yii\web\ForbiddenHttpException('Требуется вход.');
+        $dateFrom = $dateFrom ?: date('Y-m-d', strtotime('-3 days'));
+        $dateTo = $dateTo ?: date('Y-m-d');
+        $date_from = $dateFrom . ' 00:00:00';
+        $date_to = $dateTo . ' 23:59:59';
+        $cm = Yii::$app->companyManager;
+        $advQuery = (new \yii\db\Query())
+            ->select([
+                'campaign_id' => 'c.campaign_id',
+                'name' => 'c.name',
+                'status' => 'c.status',
+                'status_priority' => new \yii\db\Expression("CASE WHEN c.status = 9 THEN 1 WHEN c.status = 11 THEN 2 WHEN c.status = 7 THEN 4 WHEN c.status = 4 THEN 5 WHEN c.status = -1 THEN 6 ELSE 5 END"),
+                'views' => 'SUM(n.views)',
+                'clicks' => 'SUM(n.clicks)',
+                'atbs' => 'SUM(n.atbs)',
+                'orders' => 'SUM(n.orders)',
+                'shks' => 'SUM(n.shks)',
+                'sum' => 'SUM(n.sum)',
+                'sum_price' => 'SUM(n.sum_price)',
+                'canceled' => 'SUM(n.canceled)',
+            ])
+            ->from(['c' => 'wb_campaign'])
+            ->innerJoin(['i' => 'wb_campaign_item'], 'c.campaign_id = i.campaign_id')
+            ->innerJoin(['s' => 'wb_campaign_stats'], 'c.campaign_id = s.campaign_id')
+            ->innerJoin(['n' => 'wb_campaign_stats_nms'], 's.id = n.parent_id AND i.nm_id = n.nm_id')
+            ->innerJoin(['w' => 'wbcards'], 'n.nm_id = w.nmID')
+            ->where(['between', 's.date', $date_from, $date_to])
+            ->groupBy(['c.campaign_id', 'c.name', 'c.status'])
+            ->orderBy(['c.status' => SORT_ASC]);
+        $cm->applyToQuery($advQuery, 'c');
+        $advData = $advQuery->all();
+        $AdvProvider = new \yii\data\ArrayDataProvider([
+            'allModels' => $advData,
+            'sort' => ['attributes' => ['status','name','status_priority'],'defaultOrder' => ['status_priority' => SORT_ASC, 'name' => SORT_ASC]],
+            'pagination' => ['pageSize' => 10],
+        ]);
+        return $this->renderAjax('include/_dashboard_adv', ['AdvProvider' => $AdvProvider, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]);
+    }
+
+    public function actionDashboardOrdersSummary()
+    {
+        if (Yii::$app->user->isGuest) throw new \yii\web\ForbiddenHttpException('Требуется вход.');
+        $cm = Yii::$app->companyManager;
+        $qTotalPrice = (new \yii\db\Query())->select([
+                'price_type' => new Expression("'Без скидок'"),
+                'ieri' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 1 DAY THEN total_price ELSE 0 END)"),
+                'pazyera' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 2 DAY THEN total_price ELSE 0 END)"),
+                'past_7_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 7 DAY AND date < CURDATE() THEN total_price ELSE 0 END)"),
+                'week_before' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 14 DAY AND date < CURDATE() - INTERVAL 7 DAY THEN total_price ELSE 0 END)"),
+                'past_30_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 30 DAY AND date < CURDATE() THEN total_price ELSE 0 END)"),
+            ])->from('wb_order')->where(['>=', 'date', new Expression('CURDATE() - INTERVAL 30 DAY')]);
+        $cm->applyToQuery($qTotalPrice, '');
+        $qPriceWithDisc = (new \yii\db\Query())->select([
+                'price_type' => new Expression("'Цена со скидкой'"),
+                'ieri' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 1 DAY THEN price_with_disc ELSE 0 END)"),
+                'pazyera' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 2 DAY THEN price_with_disc ELSE 0 END)"),
+                'past_7_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 7 DAY AND date < CURDATE() THEN price_with_disc ELSE 0 END)"),
+                'week_before' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 14 DAY AND date < CURDATE() - INTERVAL 7 DAY THEN price_with_disc ELSE 0 END)"),
+                'past_30_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 30 DAY AND date < CURDATE() THEN price_with_disc ELSE 0 END)"),
+            ])->from('wb_order')->where(['>=', 'date', new Expression('CURDATE() - INTERVAL 30 DAY')]);
+        $cm->applyToQuery($qPriceWithDisc, '');
+        $qFinishedPrice = (new \yii\db\Query())->select([
+                'price_type' => new Expression("'Цена в заказе'"),
+                'ieri' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 1 DAY THEN finished_price ELSE 0 END)"),
+                'pazyera' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() - INTERVAL 2 DAY THEN finished_price ELSE 0 END)"),
+                'past_7_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 7 DAY AND date < CURDATE() THEN finished_price ELSE 0 END)"),
+                'week_before' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 14 DAY AND date < CURDATE() - INTERVAL 7 DAY THEN finished_price ELSE 0 END)"),
+                'past_30_days' => new Expression("SUM(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 30 DAY AND date < CURDATE() THEN finished_price ELSE 0 END)"),
+            ])->from('wb_order')->where(['>=', 'date', new Expression('CURDATE() - INTERVAL 30 DAY')]);
+        $cm->applyToQuery($qFinishedPrice, '');
+        $qCountOrders = (new \yii\db\Query())->select([
+                'price_type' => new Expression("'Количество заказов'"),
+                'ieri' => new Expression("COUNT(CASE WHEN DATE(date) = CURDATE() - INTERVAL 1 DAY THEN 1 END)"),
+                'pazyera' => new Expression("COUNT(CASE WHEN DATE(date) = CURDATE() - INTERVAL 2 DAY THEN 1 END)"),
+                'past_7_days' => new Expression("COUNT(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 7 DAY AND date < CURDATE() THEN 1 END)"),
+                'week_before' => new Expression("COUNT(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 14 DAY AND date < CURDATE() - INTERVAL 7 DAY THEN 1 END)"),
+                'past_30_days' => new Expression("COUNT(CASE WHEN DATE(date) >= CURDATE() - INTERVAL 30 DAY AND date < CURDATE() THEN 1 END)"),
+            ])->from('wb_order')->where(['>=', 'date', new Expression('CURDATE() - INTERVAL 30 DAY')]);
+        $cm->applyToQuery($qCountOrders, '');
+        $ordersSummary = $qCountOrders->union($qTotalPrice, true)->union($qPriceWithDisc, true)->union($qFinishedPrice, true)->all();
+        $OrdersSummaryProvider = new \yii\data\ArrayDataProvider(['allModels' => $ordersSummary, 'pagination' => false]);
+        return $this->renderAjax('include/_dashboard_orders_summary', ['OrdersSummaryProvider' => $OrdersSummaryProvider]);
+    }
+
+    public function actionDashboardLastOrders($dateFrom = null, $dateTo = null)
+    {
+        if (Yii::$app->user->isGuest) throw new \yii\web\ForbiddenHttpException('Требуется вход.');
+        $dateFrom = $dateFrom ?: date('Y-m-d', strtotime('-3 days'));
+        $dateTo = $dateTo ?: date('Y-m-d');
+        $date_from = $dateFrom . ' 00:00:00';
+        $date_to = $dateTo . ' 23:59:59';
+        $cm = Yii::$app->companyManager;
+        $lastOrdersQuery = (new \yii\db\Query())
+            ->select([
+                'title' => 'c.title',
+                'nm_id' => 'c.nmID',
+                'vendorCode' => 'c.vendorCode',
+                'cnt' => 'COUNT(o.nm_id)',
+                'cnt_0' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() THEN 1 ELSE 0 END)"),
+                'cnt_1' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 1 ELSE 0 END)"),
+                'cnt_2' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 2 DAY) THEN 1 ELSE 0 END)"),
+                'cnt_3' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 3 DAY) THEN 1 ELSE 0 END)"),
+                'pwd' => 'SUM(o.price_with_disc)',
+                'fp' => 'SUM(o.finished_price)',
+                'apwd' => 'AVG(o.price_with_disc)',
+                'aspp' => 'AVG(o.spp)',
+                'afp' => 'AVG(o.finished_price)',
+            ])
+            ->from(['o' => 'wb_order'])
+            ->innerJoin(['c' => 'wbcards'], 'o.nm_id = c.nmID')
+            ->where(['between', 'o.date', $date_from, $date_to])
+            ->groupBy(['c.title', 'c.nmID', 'c.vendorCode'])
+            ->orderBy(['cnt' => SORT_DESC]);
+        $cm->applyToQuery($lastOrdersQuery, 'o');
+        $LastOrders = $lastOrdersQuery->all();
+        $LastOrdersProvider = new \yii\data\ArrayDataProvider([
+            'allModels' => $LastOrders,
+            'pagination' => ['pageSize' => 10],
+            'sort' => ['attributes' => ['cnt', 'title'], 'defaultOrder' => ['cnt' => SORT_DESC]],
+        ]);
+        return $this->renderAjax('include/_dashboard_last_orders', ['LastOrdersProvider' => $LastOrdersProvider, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]);
+    }
+
+    public function actionDashboardLastSales($dateFrom = null, $dateTo = null)
+    {
+        if (Yii::$app->user->isGuest) throw new \yii\web\ForbiddenHttpException('Требуется вход.');
+        $dateFrom = $dateFrom ?: date('Y-m-d', strtotime('-3 days'));
+        $dateTo = $dateTo ?: date('Y-m-d');
+        $date_from = $dateFrom . ' 00:00:00';
+        $date_to = $dateTo . ' 23:59:59';
+        $cm = Yii::$app->companyManager;
+        $lastSalesQuery = (new \yii\db\Query())
+            ->select([
+                'title' => 'c.title',
+                'nm_id' => 'c.nmID',
+                'vendorCode' => 'c.vendorCode',
+                'cnt' => 'COUNT(o.nmId)',
+                'cnt_0' => new Expression("SUM(CASE WHEN DATE(date) = CURDATE() THEN 1 ELSE 0 END)"),
+                'cnt_1' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 1 ELSE 0 END)"),
+                'cnt_2' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 2 DAY) THEN 1 ELSE 0 END)"),
+                'cnt_3' => new Expression("SUM(CASE WHEN DATE(date) = DATE_SUB(CURDATE(), INTERVAL 3 DAY) THEN 1 ELSE 0 END)"),
+                'tp' => 'SUM(o.totalPrice)',
+                'pwd' => 'SUM(o.priceWithDisc)',
+                'fp' => 'SUM(o.finishedPrice)',
+                'forpay' => 'SUM(o.forPay)',
+                'adp' => 'AVG(o.discountPercent)',
+                'aspp' => 'AVG(o.spp)',
+                'apwd' => 'AVG(o.priceWithDisc)',
+                'afp' => 'AVG(o.finishedPrice)',
+                'aforpay' => 'AVG(o.forPay)',
+            ])
+            ->from(['o' => 'wb_sales'])
+            ->innerJoin(['c' => 'wbcards'], 'o.nmId = c.nmID')
+            ->where(['between', 'o.date', $date_from, $date_to])
+            ->groupBy(['c.title', 'c.nmID', 'c.vendorCode'])
+            ->orderBy(['cnt' => SORT_DESC]);
+        $cm->applyToQuery($lastSalesQuery, 'o');
+        $LastSales = $lastSalesQuery->all();
+        $LastSalesProvider = new \yii\data\ArrayDataProvider([
+            'allModels' => $LastSales,
+            'sort' => ['attributes' => ['cnt', 'title'], 'defaultOrder' => ['cnt' => SORT_DESC]],
+            'pagination' => ['pageSize' => 15],
+        ]);
+        return $this->renderAjax('include/_dashboard_last_sales', ['LastSalesProvider' => $LastSalesProvider, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]);
+    }
+
+    public function actionDashboardMonthlyFinance()
+    {
+        if (Yii::$app->user->isGuest) throw new \yii\web\ForbiddenHttpException('Требуется вход.');
+        if (Yii::$app->request->get('refresh') == 1) {
+            Yii::$app->cache->delete('monthly_finance_dashboard_data');
+        }
+        $svc = new \app\components\WbProfitService();
+        return $this->renderAjax('include/_dashboard_monthly', ['dataProvider' => $svc->getMonthlyProfitProvider()]);
+    }
+
+    public function actionDashboardTodayWidget()
+    {
+        if (Yii::$app->user->isGuest) throw new \yii\web\ForbiddenHttpException('Требуется вход.');
+        $todayStats = [
+            'period' => 'today',
+            'orders' => $this->buildPeriodStats('today', 'wb_order', 'price_with_disc'),
+            'sales' => $this->buildPeriodStats('today', 'wb_sales', 'priceWithDisc'),
+        ];
+        return $this->renderAjax('include/_today_stats_widget', ['todayStats' => $todayStats]);
+    }
+
+
+
 
 /**
  * AJAX-экшен: отдаёт данные для виджета "Заказы/Выкупы" по выбранному
