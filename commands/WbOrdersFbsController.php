@@ -9,8 +9,11 @@ use yii\db\Expression;
 use Yii;
 use app\models\WbCard;
 use app\models\WbCardSize;
-use app\models\WbVirtualStock;
+use app\models\WbStockBalance;
+use app\models\WbStockLedger;
 use app\models\WbFbsWarehouse;
+use app\models\OurWarehouse;
+use app\services\StockService;
 
 /**
  * Синхронизация FBS-заказов (сборочных заданий) и их статусов.
@@ -473,7 +476,9 @@ class WbOrdersFbsController extends Controller
     }
 
     /**
-     * Вычитает заказы с consider_orders складов из wb_virtual_stock один раз (флаг is_deducted) и выгружает изменившиеся остатки на все виртуал. склады.
+     * Вычитает FBS-заказы из оперативного склада is_fbs через StockService по-заказно (для сверки ledger).
+     * Источник заказов: wb_orders_fbs с is_deducted=0 и warehouse_id из wb_fbs_warehouse consider_orders=1 (совместимость) или our_warehouse is_fbs consider_orders=1.
+     * Каждый заказ → ledger doc_type=fbs_order doc_id=wb_order_id qty_delta=-1, wb_stock_balance is_fbs.
      */
     private function deductVirtualStocks(int $companyId): void
     {
@@ -485,82 +490,97 @@ class WbOrdersFbsController extends Controller
         }
         $isTest = !empty($company['fbs_deduct_test']);
         if ($isTest) {
-            $this->logDeduct($companyId, "TEST MODE fbs_deduct_test=1: БД обновится, PUT только в лог");
+            $this->logDeduct($companyId, "TEST MODE fbs_deduct_test=1: баланс/ledger обновятся, PUT только в лог");
         }
-        $whIds = (new Query())->select('warehouseId')->from('wb_fbs_warehouse')
-            ->where(['company_id' => $companyId, 'consider_orders' => 1, 'is_deleting' => 0])->column($db);
-        if (empty($whIds)) {
-            $this->logDeduct($companyId, "skip: нет складов с consider_orders=1");
+        // oper warehouse is_fbs
+        $fbsId = (new Query())->select('id')->from('our_warehouse')->where(['company_id'=>$companyId,'is_fbs'=>1])->scalar($db);
+        if (!$fbsId) {
+            $fbsId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_fbs'=>1])->scalar();
+        }
+        if (!$fbsId) {
+            $this->logDeduct($companyId, "skip: нет склада OurWarehouse is_fbs=1");
             return;
         }
-        $orders = (new Query())->select(['wb_order_id','chrt_id','warehouse_id'])->from('wb_orders_fbs')
-            ->where(['company_id' => $companyId, 'is_deducted' => 0])->andWhere(['in','warehouse_id',$whIds])->all($db);
+        // consider_orders: prefer OurWarehouse, fallback wb_fbs_warehouse
+        $owConsider = (int)(new Query())->select('consider_orders')->from('our_warehouse')->where(['id'=>$fbsId])->scalar($db);
+        $whIds = (new Query())->select('warehouseId')->from('wb_fbs_warehouse')
+            ->where(['company_id' => $companyId, 'consider_orders' => 1, 'is_deleting' => 0])->column($db);
+        $fbsName = (new Query())->select('name')->from('our_warehouse')->where(['id'=>$fbsId])->scalar($db);
+        $this->logDeduct($companyId, "[NEW] engine=wb_stock_balance is_fbs=$fbsId ($fbsName) owConsider=$owConsider wbConsiderWh=[".implode(',', $whIds ?: ['none'])."]");
+        if (!$owConsider && empty($whIds)) {
+            $this->logDeduct($companyId, "skip: нет складов с consider_orders=1 (our_warehouse is_fbs и wb_fbs_warehouse)");
+            return;
+        }
+        // если our_warehouse consider=1 и wb_fbs_warehouse пусто — вычитаем все заказы (без фильтра по warehouse_id)
+        $orderQuery = (new Query())->select(['wb_order_id','chrt_id','warehouse_id'])->from('wb_orders_fbs')
+            ->where(['company_id' => $companyId, 'is_deducted' => 0]);
+        if (!empty($whIds)) {
+            $orderQuery->andWhere(['in','warehouse_id',$whIds]);
+        }
+        $orders = $orderQuery->all($db);
         if (empty($orders)) {
             $this->logDeduct($companyId, "skip: нет новых заказов для вычета");
             return;
         }
-        $cntByChrt = array_count_values(array_filter(array_column($orders,'chrt_id')));
-        if (empty($cntByChrt)) {
-            $this->logDeduct($companyId, "skip: у заказов пустой chrt_id");
-            return;
-        }
-        // разбивка по складам для удобства
         $cntByWh = array_count_values(array_filter(array_column($orders,'warehouse_id')));
-        $whNames = (new Query())->select(['warehouseId','name'])->from('wb_fbs_warehouse')->where(['in','warehouseId', array_keys($cntByWh)])->indexBy('warehouseId')->all($db);
+        $whNames = !empty($cntByWh) ? (new Query())->select(['warehouseId','name'])->from('wb_fbs_warehouse')->where(['in','warehouseId', array_keys($cntByWh)])->indexBy('warehouseId')->all($db) : [];
         $whParts = [];
-        foreach ($cntByWh as $whId => $cnt) {
-            $whParts[] = "$whId (" . ($whNames[$whId]['name'] ?? '?') . "): $cnt";
-        }
-        $this->stdout("  [deduct] заказов ".count($orders)." chrt ".count($cntByChrt)." для вычета\n", Console::FG_YELLOW);
-        $this->logDeduct($companyId, "start: ".count($orders)." заказов, ".count($cntByChrt)." chrt | по складам: ".implode(', ', $whParts));
+        foreach ($cntByWh as $whId => $cnt) $whParts[] = "$whId (".($whNames[$whId]['name'] ?? '?')."): $cnt";
+        $this->stdout("  [NEW] заказов ".count($orders)." для вычета через wb_stock_balance is_fbs=$fbsId\n", Console::FG_YELLOW);
+        $this->logDeduct($companyId, "[NEW] start: ".count($orders)." заказов | по складам WB: ".implode(', ', $whParts ?: ['all'])." → минус с OurWarehouse is_fbs=$fbsId");
 
         $changedSkus = [];
-        $deductDetails = [];
-        foreach ($cntByChrt as $chrtId => $cnt) {
+        $okCount = 0; $skipLedger = 0; $failCount = 0;
+        foreach ($orders as $order) {
+            $orderId = (int)($order['wb_order_id'] ?? 0);
+            if (!$orderId) { $failCount++; continue; }
+            // dedup по ledger — уже списано
+            if ((new Query())->from('wb_stock_ledger')->where(['company_id'=>$companyId,'doc_type'=>'fbs_order','doc_id'=>$orderId])->exists($db)) {
+                $db->createCommand()->update('wb_orders_fbs', ['is_deducted'=>1,'deducted_at'=>new Expression('NOW()')], ['wb_order_id'=>$orderId])->execute();
+                $skipLedger++;
+                continue;
+            }
+            $chrtId = $order['chrt_id'] ?? null;
+            if (empty($chrtId)) {
+                $this->logDeduct($companyId, "  order $orderId: пустой chrt_id, пропуск");
+                continue;
+            }
             $size = WbCardSize::findOne(['chrtID' => (int)$chrtId]);
             if (!$size) {
-                $this->logDeduct($companyId, "  chrt $chrtId: sku не найден, пропуск");
+                $this->logDeduct($companyId, "  order $orderId chrt $chrtId: sku не найден, пропуск");
                 continue;
             }
             $sku = $size->sku;
             $card = WbCard::findOne(['nmID'=>$size->nmID]);
-            $vendorCode = $card ? $card->vendorCode : '-';
-            $nmID = $size->nmID;
-            $whsForChrt = array_unique(array_column(array_filter($orders, fn($o)=>(int)($o['chrt_id']??0)===(int)$chrtId), 'warehouse_id'));
-            $whsStr = $whsForChrt ? implode(',', $whsForChrt) : '-';
-            $stock = WbVirtualStock::findOne(['company_id'=>$companyId,'sku'=>$sku]);
-            $oldQty = $stock ? (int)$stock->quantity : 0;
-            $newQty = max(0, $oldQty - (int)$cnt);
-            if ($stock) {
-                $db->createCommand()->update('wb_virtual_stock', ['quantity'=>$newQty], ['company_id'=>$companyId,'sku'=>$sku])->execute();
-            } else {
-                $newQty = 0;
-                $db->createCommand()->insert('wb_virtual_stock', ['company_id'=>$companyId,'sku'=>$sku,'nmID'=>$size->nmID,'chrtID'=>$size->chrtID,'quantity'=>0])->execute();
+            $vendor = $card ? $card->vendorCode : '-';
+            // StockService по-заказно: -1 шт, ledger doc_id=orderId для сверки
+            $res = StockService::apply($companyId, (int)$fbsId, 'fbs_order', $orderId, [['sku'=>$sku,'delta'=>-1]]);
+            if (!$res['ok']) {
+                $this->logDeduct($companyId, "  order $orderId chrt $chrtId sku $sku vendor $vendor: FAILED ".$res['error']);
+                $failCount++;
+                continue;
             }
-            if ($oldQty !== $newQty) {
-                $changedSkus[] = $sku;
-                $deductDetails[] = "$sku (chrt $chrtId): $oldQty -> $newQty (-$cnt)";
-            }
-            $this->logDeduct($companyId, "  chrt $chrtId sku $sku vendorCode $vendorCode nmID $nmID wh [$whsStr]: $oldQty -> $newQty (-$cnt)");
+            $db->createCommand()->update('wb_orders_fbs', ['is_deducted'=>1,'deducted_at'=>new Expression('NOW()')], ['wb_order_id'=>$orderId])->execute();
+            $changedSkus[$sku] = true;
+            $okCount++;
+            $this->logDeduct($companyId, "[NEW] order $orderId chrt $chrtId sku $sku vendor $vendor nmID {$size->nmID} wh {$order['warehouse_id']}: wb_stock_balance is_fbs $fbsId -1 ledger ok (doc_type=fbs_order doc_id=$orderId)");
         }
-
-        // помечаем заказы как вычтенные (даже в TEST — чтобы не вычитать дважды)
-        $ids = array_column($orders,'wb_order_id');
-        $db->createCommand()->update('wb_orders_fbs', ['is_deducted'=>1,'deducted_at'=>new Expression('NOW()')], ['in','wb_order_id',$ids])->execute();
-        $this->logDeduct($companyId, "marked ".count($ids)." orders is_deducted=1");
-
-        if (empty($changedSkus)) {
-            $this->logDeduct($companyId, "no changed skus, upload skipped");
+        $this->logDeduct($companyId, "[NEW] deduct done: ok=$okCount skipLedger=$skipLedger fail=$failCount changedSkus=".count($changedSkus)." engine=wb_stock_balance");
+        if ($okCount===0 && $skipLedger===0) {
+            $this->logDeduct($companyId, "no applied orders, upload skipped");
             return;
         }
-
-        $this->logDeduct($companyId, "changed: ".implode(', ',$deductDetails));
-        $this->uploadChangedVirtualStocks($companyId, $changedSkus);
+        // даже если только skipLedger — остатки могли уже быть списаны ранее, но для консистентности выгружаем измененные sku
+        $this->uploadChangedVirtualStocks($companyId, array_keys($changedSkus));
     }
 
     private function uploadChangedVirtualStocks(int $companyId, array $skus): void
     {
         $db = Yii::$app->db;
+        if (empty($skus)) {
+            $this->logDeduct($companyId, "upload skip: нет changed skus");
+            return;
+        }
         $company = (new Query())->from('companies')->where(['id'=>$companyId])->one($db);
         $token = $company['api_key'] ?? null;
         if (!$token) {
@@ -569,7 +589,7 @@ class WbOrdersFbsController extends Controller
         }
         $warehouses = WbFbsWarehouse::find()->where(['company_id'=>$companyId,'is_virtual'=>1])->all();
         if (empty($warehouses)) {
-            $this->logDeduct($companyId, "upload skip: нет виртуал. складов");
+            $this->logDeduct($companyId, "upload skip: нет виртуал. складов is_virtual=1");
             return;
         }
         $isTest = !empty($company['fbs_deduct_test']);
@@ -577,12 +597,23 @@ class WbOrdersFbsController extends Controller
             $this->logDeduct($companyId, "TEST MODE: реальные PUT на WB пропущены (fbs_deduct_test=1)");
             $this->stdout("  [deduct] TEST MODE - только лог, без PUT\n", Console::FG_YELLOW);
         }
-        $stocks = WbVirtualStock::find()->where(['company_id'=>$companyId])->andWhere(['in','sku',$skus])->all();
+        $fbsId = (new Query())->select('id')->from('our_warehouse')->where(['company_id'=>$companyId,'is_fbs'=>1])->scalar($db);
+        if (!$fbsId) $fbsId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_fbs'=>1])->scalar();
+        $fbsName = (new Query())->select('name')->from('our_warehouse')->where(['id'=>$fbsId])->scalar($db);
+        $this->logDeduct($companyId, "[NEW] upload source=wb_stock_balance is_fbs=$fbsId ($fbsName) skus=".count($skus)." → PUT на wb_fbs_warehouse is_virtual=".count($warehouses));
+        $stocks = WbStockBalance::find()->where(['company_id'=>$companyId,'warehouseId'=>$fbsId])->andWhere(['in','sku',$skus])->all();
+        $bySku = [];
+        foreach ($stocks as $s) $bySku[$s->sku] = $s;
+        // для нулевых остатков (ушли в 0) — строки в balance остались с quantity=0, но если вдруг нет — считаем 0
         $payloadStocks = [];
-        foreach ($stocks as $s) {
-            $payloadStocks[] = ['chrtId'=>(int)$s->chrtID, 'amount'=>(int)$s->quantity];
+        foreach ($skus as $sku) {
+            $s = $bySku[$sku] ?? null;
+            if ($s) $payloadStocks[] = ['chrtId'=>(int)$s->chrtID, 'amount'=>(int)$s->quantity];
+            else {
+                $size = WbCardSize::findOne(['sku'=>$sku]);
+                if ($size) $payloadStocks[] = ['chrtId'=>(int)$size->chrtID, 'amount'=>0];
+            }
         }
-        // также sku которых не было в wb_virtual_stock но попали в changed (нулевой остаток уже создан)
         foreach ($warehouses as $wh) {
             $chunks = array_chunk($payloadStocks, 1000);
             foreach ($chunks as $idx=>$chunk) {
@@ -590,9 +621,7 @@ class WbOrdersFbsController extends Controller
                 $url = "https://marketplace-api.wildberries.ru/api/v3/stocks/{$wh->warehouseId}";
                 $prefix = $isTest ? "[DRY] " : "";
                 $this->logDeduct($companyId, $prefix."PUT $url chunk ".($idx+1)."/".count($chunks)." ".json_encode($payload, JSON_UNESCAPED_UNICODE));
-                if ($isTest) {
-                    continue;
-                }
+                if ($isTest) continue;
                 try {
                     $resp = Yii::$app->wbHttpClient->request('PUT', $url, $payload, $token, $companyId, null, true);
                     $ok = $resp->isOk;
@@ -626,6 +655,11 @@ class WbOrdersFbsController extends Controller
         $file = $dir . '/wb-fbs-deduct-'.date('Y-m-d').'.log';
         @file_put_contents($file, $line, FILE_APPEND);
         Yii::info($msg, 'wb_fbs_deduct');
+        // ротация — держать 3 последних дня
+        $cut = time() - 3*86400;
+        foreach ((glob($dir . '/wb-fbs-deduct-*.log') ?: []) as $old) {
+            if (@filemtime($old) < $cut) @unlink($old);
+        }
     }
 
     /**

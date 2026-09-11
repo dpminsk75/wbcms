@@ -26,10 +26,20 @@ class StockService
      * Атомарно в транзакции, пишет ledger, не дает уйти в минус.
      * @return array{ok:bool, error?:string}
      */
+    private static function resolveUserId(?int $userId): ?int
+    {
+        if ($userId !== null) return $userId;
+        if (Yii::$app->has('user') && isset(Yii::$app->user) && !Yii::$app->user->isGuest) {
+            try { return (int)Yii::$app->user->id; } catch (\Throwable $e) { return null; }
+        }
+        return null;
+    }
+
     public static function apply(int $companyId, int $warehouseId, string $docType, ?int $docId, array $items, ?int $userId = null): array
     {
         $db = Yii::$app->db;
         $tx = $db->beginTransaction();
+        $resolvedUserId = self::resolveUserId($userId);
         try {
             foreach ($items as $it) {
                 $sku = $it['sku'];
@@ -80,7 +90,7 @@ class StockService
                 $ledger->qty_delta = $delta;
                 $ledger->qty_before = $before;
                 $ledger->qty_after = $after;
-                $ledger->user_id = $userId ?? (Yii::$app->user->isGuest ? null : Yii::$app->user->id);
+                $ledger->user_id = $resolvedUserId;
                 if (!$ledger->save(false)) {
                     $tx->rollBack();
                     return ['ok'=>false,'error'=>'ledger save failed'];
@@ -119,6 +129,7 @@ class StockService
 
     private static function applyInsideTx($db, int $companyId, int $warehouseId, string $docType, ?int $docId, array $deltas, ?int $userId): array
     {
+        $resolvedUserId = self::resolveUserId($userId);
         foreach ($deltas as $it) {
             $sku = $it['sku']; $delta = (int)$it['delta'];
             if ($delta===0) continue;
@@ -133,7 +144,7 @@ class StockService
             } else {
                 $b = new WbStockBalance(); $b->company_id=$companyId; $b->warehouseId=$warehouseId; $b->sku=$sku; $b->nmID=$size->nmID??null; $b->chrtID=$size->chrtID??null; $b->quantity=$after; $b->save(false);
             }
-            $l = new WbStockLedger(); $l->company_id=$companyId; $l->doc_type=$docType; $l->doc_id=$docId; $l->warehouseId=$warehouseId; $l->sku=$sku; $l->qty_delta=$delta; $l->qty_before=$before; $l->qty_after=$after; $l->user_id=$userId?? (Yii::$app->user->isGuest?null:Yii::$app->user->id); $l->save(false);
+            $l = new WbStockLedger(); $l->company_id=$companyId; $l->doc_type=$docType; $l->doc_id=$docId; $l->warehouseId=$warehouseId; $l->sku=$sku; $l->qty_delta=$delta; $l->qty_before=$before; $l->qty_after=$after; $l->user_id=$resolvedUserId; $l->save(false);
         }
         return ['ok'=>true];
     }

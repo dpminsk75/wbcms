@@ -98,6 +98,9 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
     <div id="virtual-import-result" class="alert alert-info" style="display:none;margin-top:10px"></div>
     <div id="upload-result" class="alert" style="display:none;margin-top:10px"></div>
 
+<div class="alert alert-info py-2 small mb-2">
+  Источник: <b>Центральный</b> — <?= Html::encode($centralName ?? '—') ?> (<?= Html::encode($centralId ?? '—') ?>) — колонка <b>Остаток</b> &nbsp;|&nbsp; <b>Оперативный (Is Fbs)</b> — <?= Html::encode($fbsName ?? '—') ?> (<?= Html::encode($fbsId ?? '—') ?>) — колонка <b>Количество</b> (редактируется, через Перемещение)
+</div>
 <div class="custom-compact-grid">
     <?= GridView::widget([
         'dataProvider'=>$dataProvider,
@@ -105,7 +108,7 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
         'bordered'=>true,'striped'=>true,'condensed'=>true,'hover'=>true,
         'panel'=>[
                 'type' => GridView::TYPE_PRIMARY,
-                'heading'=>'Виртуальные остатки',
+                'heading'=>'Виртуальные остатки — Центр: '.Html::encode($centralName ?? '—').' / Опер: '.Html::encode($fbsName ?? '—'),
                 'headingOptions' => ['class' => 'card-header text-white bg-wb'],
                 'after' => false,
                 ],
@@ -233,7 +236,7 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
   function updateDraftInfo(){
     var d=getDrafts(); var cnt=Object.keys(d).length;
     var el=document.getElementById('draft-info');
-    if(cnt){ el.style.display='block'; el.innerHTML='Несохранённых правок: '+cnt+' <button class="btn btn-xs btn-default" onclick="if(confirm(\'Очистить черновики?\')){localStorage.removeItem(\'wb_fbs_virtual_draft\');location.reload();}">Очистить</button> <small class="text-muted">сохраняются при поиске/пагинации, уйдут после Выгрузить (автосохранение)</small>'; }
+    if(cnt){ el.style.display='block'; el.innerHTML='Несохранённых правок: '+cnt+' <button class="btn btn-warning btn-sm ms-2" id="save-virtual-btn" title="Сохранить без выгрузки на WB — создаст TRANSFER"><i class="fas fa-save me-1"></i> Сохранить</button> <button class="btn btn-xs btn-default" onclick="if(confirm(\'Очистить черновики?\')){localStorage.removeItem(\'wb_fbs_virtual_draft\');location.reload();}">Очистить</button> <small class="text-muted ms-2">сохраняются при поиске/пагинации, уйдут после Сохранить или Выгрузить</small>'; }
     else el.style.display='none';
   }
   function restoreDrafts(){
@@ -463,14 +466,31 @@ $virtualNames = implode(', ', array_map(fn($w)=> $w->name . ' ('.$w->warehouseId
     if(pending.length){
       console.log('[FBS] auto-save '+pending.length+' before upload');
       post('<?= Url::to(['save-virtual']) ?>',{changes:JSON.stringify(pending)}, function(d){
-        if(!d.success){ self.disabled=false; el.className='alert alert-danger'; el.textContent='Ошибка автосохранения'; return; }
-        localStorage.removeItem(DRAFT_KEY); window._virtualMatched=null;
+        if(!d.success){ self.disabled=false; el.className='alert alert-danger'; el.textContent='Ошибка автосохранения: '+(d.error||''); return; }
+        localStorage.removeItem(DRAFT_KEY); window._virtualMatched=null; updateDraftInfo();
         el.textContent='Сохранено '+d.processed+', выгружаю...';
         doUpload();
       });
     } else {
       doUpload();
     }
+  });
+  // делегированно — кнопка теперь внутри #draft-info (пересоздается при каждом updateDraftInfo)
+  document.addEventListener('click', function(ev){
+    var btn=ev.target.closest('#save-virtual-btn');
+    if(!btn) return;
+    var pending=collectVirtualChanges();
+    var el=document.getElementById('upload-result'); el.style.display='block';
+    if(!pending.length){ el.className='alert alert-warning'; el.textContent='Нет изменений для сохранения'; return; }
+    btn.disabled=true; el.className='alert alert-info'; el.textContent='Сохраняю '+pending.length+'...';
+    post('<?= Url::to(['save-virtual']) ?>',{changes:JSON.stringify(pending)}, function(d){
+      btn.disabled=false;
+      console.log('[FBS] save-virtual', d);
+      if(!d.success){ el.className='alert alert-danger'; el.textContent=d.error||'Ошибка сохранения'; return; }
+      localStorage.removeItem(DRAFT_KEY); window._virtualMatched=null; updateDraftInfo();
+      el.className='alert alert-success'; el.textContent='Сохранено '+d.processed+' — TRANSFER документы созданы. Обновляю...';
+      setTimeout(function(){ location.reload(); }, 800);
+    });
   });
   document.addEventListener('click', function(ev){
     var btn=ev.target.closest('.copy-sku-btn');

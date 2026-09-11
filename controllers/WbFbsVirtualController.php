@@ -13,13 +13,16 @@ use yii\web\UploadedFile;
 use yii\helpers\Json;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use app\models\WbFbsWarehouse;
-use app\models\WbCentralStock;
-use app\models\WbVirtualStock;
+use app\models\OurWarehouse;
 use app\models\WbCard;
 use app\models\WbCardSize;
+use app\models\WbStockBalance;
+use app\services\StockService;
 
 /**
- * Управление виртуальными складами и остатками FBS.
+ * Управление виртуальными складами и остатками FBS — теперь на wb_stock_balance.
+ * Центральный физический (is_central) и оперативный физический is_fbs (Is Fbs) — оба OurWarehouse.
+ * Виртуальные склады WB (WbFbsWarehouse is_virtual) — только для выгрузки PUT.
  */
 class WbFbsVirtualController extends Controller
 {
@@ -55,34 +58,47 @@ class WbFbsVirtualController extends Controller
         $isGlobal = Yii::$app->companyManager->isGlobalMode();
         $companyFilter = (!$isGlobal && $companyId) ? $companyId : null;
 
-        // Виртуальные склады для шапки
+        // WB-виртуальные склады для шапки (куда грузим)
         $virtualWarehouses = WbFbsWarehouse::find()->where(['is_virtual' => 1]);
         if ($companyFilter) {
             $virtualWarehouses->andWhere(['company_id' => $companyFilter]);
         }
         $virtualWarehouses = $virtualWarehouses->all();
 
-        // Единая таблица: все sku из wbcards_sizes + left join центр/виртуал
+        // OurWarehouse ids для балансов
+        $centralId = null;
+        $fbsId = null;
+        if ($companyFilter) {
+            $centralId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyFilter,'is_central'=>1])->scalar();
+            $fbsId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyFilter,'is_fbs'=>1])->scalar();
+        } else {
+            $centralId = OurWarehouse::find()->select('id')->where(['is_central'=>1])->scalar();
+            $fbsId = OurWarehouse::find()->select('id')->where(['is_fbs'=>1])->scalar();
+        }
+        // fallback если нет — пробуем первый склад компании
+        if (!$centralId && $companyFilter) $centralId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyFilter])->scalar();
+        if (!$fbsId && $companyFilter) $fbsId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyFilter,'is_active'=>1])->scalar();
+
+        // Единая таблица: все sku из wbcards_sizes + left join балансы OurWarehouse
         $baseQuery = (new Query())
             ->select([
                 'ws.sku', 'ws.nmID', 'ws.chrtID',
                 'wc.vendorCode', 'wc.title', 'wc.brand',
-                'cs.quantity as central_qty',
-                'vs.quantity as virtual_qty',
+                'cb.quantity as central_qty',
+                'fb.quantity as virtual_qty',
             ])
             ->from(['ws' => 'wbcards_sizes'])
             ->innerJoin(['wc' => 'wbcards'], 'wc.nmID = ws.nmID');
         if ($companyFilter) {
-            $baseQuery->leftJoin(['cs' => 'wb_central_stock'], 'cs.sku = ws.sku AND cs.company_id = :cid', [':cid' => $companyFilter]);
-            $baseQuery->leftJoin(['vs' => 'wb_virtual_stock'], 'vs.sku = ws.sku AND vs.company_id = :cid2', [':cid2' => $companyFilter]);
+            $baseQuery->leftJoin(['cb' => 'wb_stock_balance'], 'cb.sku = ws.sku AND cb.company_id = :cid AND cb.warehouseId = :centralId', [':cid' => $companyFilter, ':centralId'=>$centralId]);
+            $baseQuery->leftJoin(['fb' => 'wb_stock_balance'], 'fb.sku = ws.sku AND fb.company_id = :cid2 AND fb.warehouseId = :fbsId', [':cid2' => $companyFilter, ':fbsId'=>$fbsId]);
             $baseQuery->andWhere(['wc.company_id' => $companyFilter]);
         } else {
-            $baseQuery->leftJoin(['cs' => 'wb_central_stock'], 'cs.sku = ws.sku');
-            $baseQuery->leftJoin(['vs' => 'wb_virtual_stock'], 'vs.sku = ws.sku');
+            $baseQuery->leftJoin(['cb' => 'wb_stock_balance'], 'cb.sku = ws.sku AND cb.warehouseId = :centralId2', [':centralId2'=>$centralId]);
+            $baseQuery->leftJoin(['fb' => 'wb_stock_balance'], 'fb.sku = ws.sku AND fb.warehouseId = :fbsId2', [':fbsId2'=>$fbsId]);
         }
         $baseQuery->orderBy(['wc.vendorCode' => SORT_ASC, 'ws.sku' => SORT_ASC]);
 
-        // Фильтр поиска по sku/vendorCode/title
         $q = Yii::$app->request->get('q');
         if (!empty($q)) {
             $baseQuery->andWhere(['or',
@@ -92,17 +108,14 @@ class WbFbsVirtualController extends Controller
                 ['like', 'ws.nmID', $q],
             ]);
         }
-
-        // Фильтр по количеству виртуал. остатка
         $qtyFilter = Yii::$app->request->get('qty', 'all');
         if ($qtyFilter === 'not_found') {
-            $baseQuery->andWhere(['vs.quantity' => null]);
+            $baseQuery->andWhere(['fb.quantity' => null]);
         } elseif ($qtyFilter === 'zero') {
-            $baseQuery->andWhere(['vs.quantity' => 0]);
+            $baseQuery->andWhere(['fb.quantity' => 0]);
         } elseif ($qtyFilter === '1_9') {
-            $baseQuery->andWhere(['between', 'vs.quantity', 1, 9]);
+            $baseQuery->andWhere(['between', 'fb.quantity', 1, 9]);
         }
-
         $whFilter = Yii::$app->request->get('wh', 'all');
 
         $rows = $baseQuery->all();
@@ -111,6 +124,8 @@ class WbFbsVirtualController extends Controller
             'pagination' => ['pageSize' => 100],
             'sort' => false,
         ]);
+        $centralName = $centralId ? OurWarehouse::find()->select('name')->where(['id'=>$centralId])->scalar() : '—';
+        $fbsName = $fbsId ? OurWarehouse::find()->select('name')->where(['id'=>$fbsId])->scalar() : '—';
 
         return $this->render('index', [
             'dataProvider' => $dataProvider,
@@ -118,6 +133,10 @@ class WbFbsVirtualController extends Controller
             'q' => $q,
             'qtyFilter' => $qtyFilter,
             'whFilter' => $whFilter,
+            'centralId'=>$centralId,
+            'fbsId'=>$fbsId,
+            'centralName'=>$centralName,
+            'fbsName'=>$fbsName,
         ]);
     }
 
@@ -144,7 +163,6 @@ class WbFbsVirtualController extends Controller
         }
         $model->is_virtual = $model->is_virtual ? 0 : 1;
         $model->save(false);
-        // Для модалки всегда отдаём JSON (fetch с X-Requested-With иногда не проходит isAjax из-за прокси), иначе был 302
         if (Yii::$app->request->isAjax || Yii::$app->request->isPost) {
             Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
             return ['success' => true, 'is_virtual' => (int)$model->is_virtual, 'id' => $model->id];
@@ -192,10 +210,6 @@ class WbFbsVirtualController extends Controller
         return $this->render('deduct-log', ['files'=>$files,'selected'=>$selected,'content'=>$content]);
     }
 
-    /**
-     * Парсит Excel для центр. склада и возвращает matched/skipped как в StockSnapshotController.
-     * Колонки: Баркод/sku, Артикул продавца/vendorCode, nmID/Артикул, Количество/qty
-     */
     public function actionParseCentral()
     {
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
@@ -237,7 +251,6 @@ class WbFbsVirtualController extends Controller
 
             $companyId = Yii::$app->companyManager->getCurrentId();
             if (Yii::$app->companyManager->isGlobalMode()) {
-                // в глобальном режиме берем первую активную компанию или требуем выбора
                 $companyId = $companyId ?: (new Query())->select('id')->from('companies')->where(['is_active' => 1])->scalar();
             }
 
@@ -265,14 +278,12 @@ class WbFbsVirtualController extends Controller
 
     private function resolveSku($sku, $vendorCode, $nmIdRaw, $companyId)
     {
-        // 1) по sku напрямую в wbcards_sizes
         if (!empty($sku)) {
             $row = (new Query())->select(['sku','nmID','chrtID'])->from('wbcards_sizes')->where(['sku' => $sku])->one();
             if ($row) {
                 return $row;
             }
         }
-        // 2) по nmID
         if (!empty($nmIdRaw) && ctype_digit($nmIdRaw)) {
             $card = WbCard::find()->where(['nmID' => (int)$nmIdRaw])->one();
             if ($card) {
@@ -280,11 +291,9 @@ class WbFbsVirtualController extends Controller
                 if ($size) {
                     return ['sku' => $size->sku, 'nmID' => $size->nmID, 'chrtID' => $size->chrtID];
                 }
-                // если у карточки 1 размер - берем его, иначе пропускаем (неоднозначно)
                 return null;
             }
         }
-        // 3) по vendorCode
         if (!empty($vendorCode)) {
             $q = WbCard::find()->where(['vendorCode' => trim($vendorCode)]);
             if ($companyId) {
@@ -294,8 +303,6 @@ class WbFbsVirtualController extends Controller
             if ($card) {
                 $size = WbCardSize::find()->where(['nmID' => $card->nmID])->one();
                 if ($size) {
-                    // если несколько размеров - берем первый, но лучше требовать sku
-                    // для однозначности: если у товара >1 sku - пропускаем
                     $cnt = WbCardSize::find()->where(['nmID' => $card->nmID])->count();
                     if ($cnt == 1) {
                         return ['sku' => $size->sku, 'nmID' => $size->nmID, 'chrtID' => $size->chrtID];
@@ -329,42 +336,59 @@ class WbFbsVirtualController extends Controller
         if (Yii::$app->companyManager->isGlobalMode()) {
             $companyId = $companyId ?: (new Query())->select('id')->from('companies')->where(['is_active' => 1])->scalar();
         }
-        $modelClass = $target === 'central' ? WbCentralStock::class : WbVirtualStock::class;
-        $table = $target === 'central' ? 'wb_central_stock' : 'wb_virtual_stock';
+        // OurWarehouse ids
+        $centralId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_central'=>1])->scalar();
+        $fbsId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_fbs'=>1])->scalar();
+        if (!$centralId) $centralId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId])->scalar();
+        if (!$fbsId) $fbsId = $centralId;
+        $targetId = $target==='central' ? $centralId : $fbsId;
 
-        $processed = 0;
-        $errors = [];
-        foreach ($changes as $c) {
-            $sku = $c['sku'] ?? null;
-            $qty = $c['qty'] ?? null;
-            if (empty($sku) || $qty === null || !is_numeric($qty)) {
-                $errors[] = "Пропущено sku={$sku}";
-                continue;
+        if ($target === 'virtual') {
+            // тонкий момент: Количество (is_fbs) правится только через TRANSFER Центральный ↔ Оперативный
+            $plus = []; $minus = [];
+            foreach ($changes as $c) {
+                $sku = $c['sku'] ?? null;
+                $newQty = $c['qty'] ?? null;
+                if (empty($sku) || $newQty===null || !is_numeric($newQty)) continue;
+                $newQty = (int)round((float)$newQty);
+                $oldQty = WbStockBalance::find()->select('quantity')->where(['company_id'=>$companyId,'warehouseId'=>$fbsId,'sku'=>$sku])->scalar();
+                $oldQty = $oldQty===false ? 0 : (int)$oldQty;
+                $delta = $newQty - $oldQty;
+                if ($delta===0) continue;
+                if ($delta>0) $plus[] = ['sku'=>$sku,'qty'=>$delta];
+                else $minus[] = ['sku'=>$sku,'qty'=> -$delta];
             }
-            $size = WbCardSize::findOne(['sku' => $sku]);
-            if (!$size) {
-                $errors[] = "SKU $sku не найден в wbcards_sizes";
-                continue;
+            $errors=[];
+            $processed=0;
+            if (!empty($plus)) {
+                $res = StockService::transfer($companyId, $centralId, $fbsId, 'fbs_virtual_adjust', null, $plus, Yii::$app->user->id);
+                if (!$res['ok']) return ['success'=>false,'error'=>$res['error'],'processed'=>0];
+                $processed += count($plus);
             }
-            $row = [
-                'company_id' => $companyId,
-                'sku' => $sku,
-                'nmID' => $size->nmID,
-                'chrtID' => $size->chrtID,
-                'quantity' => (int)round((float)$qty),
-            ];
-            try {
-                Yii::$app->db->createCommand()->upsert($table, $row, [
-                    'nmID' => $row['nmID'],
-                    'chrtID' => $row['chrtID'],
-                    'quantity' => $row['quantity'],
-                ])->execute();
-                $processed++;
-            } catch (\Throwable $e) {
-                $errors[] = $sku . ': ' . $e->getMessage();
+            if (!empty($minus)) {
+                $res = StockService::transfer($companyId, $fbsId, $centralId, 'fbs_virtual_adjust', null, $minus, Yii::$app->user->id);
+                if (!$res['ok']) return ['success'=>false,'error'=>$res['error'],'processed'=>$processed];
+                $processed += count($minus);
             }
+            // создаем wb_doc TRANSFER для истории (опционально, ledger уже есть)
+            // StockService уже создал ledger с doc_type fbs_virtual_adjust
+            return ['success'=>true,'processed'=>$processed,'errors'=>$errors];
         }
-        return ['success' => true, 'processed' => $processed, 'errors' => $errors];
+
+        // central — прямой приход/корректировка на центральный
+        $items=[];
+        foreach ($changes as $c) {
+            $sku=$c['sku']??null; $qty=$c['qty']??null;
+            if (empty($sku) || $qty===null || !is_numeric($qty)) continue;
+            $old = WbStockBalance::find()->select('quantity')->where(['company_id'=>$companyId,'warehouseId'=>$targetId,'sku'=>$sku])->scalar();
+            $old = $old===false?0:(int)$old;
+            $delta = (int)round((float)$qty) - $old;
+            if ($delta!==0) $items[]=['sku'=>$sku,'delta'=>$delta];
+        }
+        if (empty($items)) return ['success'=>true,'processed'=>0,'errors'=>[]];
+        $res = StockService::apply($companyId, $targetId, 'fbs_central_adjust', null, $items, Yii::$app->user->id);
+        if (!$res['ok']) return ['success'=>false,'error'=>$res['error']];
+        return ['success'=>true,'processed'=>count($items),'errors'=>[]];
     }
 
     public function actionDeleteVirtual()
@@ -376,16 +400,20 @@ class WbFbsVirtualController extends Controller
         }
         $companyId = Yii::$app->companyManager->getCurrentId();
         if (Yii::$app->companyManager->isGlobalMode()) {
-            $companyId = $companyId ?: (new \yii\db\Query())->select('id')->from('companies')->where(['is_active' => 1])->scalar();
+            $companyId = $companyId ?: (new Query())->select('id')->from('companies')->where(['is_active' => 1])->scalar();
         }
-        Yii::$app->db->createCommand()->delete('wb_virtual_stock', ['company_id' => $companyId, 'sku' => $sku])->execute();
+        $centralId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_central'=>1])->scalar();
+        $fbsId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_fbs'=>1])->scalar();
+        if (!$fbsId) return ['success'=>false,'error'=>'Нет оперативного склада is_fbs'];
+        $oldQty = WbStockBalance::find()->select('quantity')->where(['company_id'=>$companyId,'warehouseId'=>$fbsId,'sku'=>$sku])->scalar();
+        $oldQty = $oldQty===false?0:(int)$oldQty;
+        if ($oldQty===0) return ['success'=>true];
+        // возврат на центральный
+        $res = StockService::transfer($companyId, $fbsId, $centralId, 'fbs_virtual_delete', null, [['sku'=>$sku,'qty'=>$oldQty]], Yii::$app->user->id);
+        if (!$res['ok']) return ['success'=>false,'error'=>$res['error']];
         return ['success' => true];
     }
 
-    /**
-     * Выгрузка одной строки виртуал. остатка на все is_virtual склады: PUT /api/v3/stocks/{warehouseId}
-     * Чекбокс теста: если test=1 - эмуляция без реального PUT, вывод в консоль браузера и лог
-     */
     public function actionUploadOne()
     {
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
@@ -399,29 +427,52 @@ class WbFbsVirtualController extends Controller
         if (Yii::$app->companyManager->isGlobalMode()) {
             $companyId = $companyId ?: (new Query())->select('id')->from('companies')->where(['is_active' => 1])->scalar();
         }
-        $stock = WbVirtualStock::find()->where(['company_id' => $companyId, 'sku' => $sku])->one();
-        // Разрешаем выгрузку несохранённого черновика: берём amount из запроса, иначе из БД
+        $fbsId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_fbs'=>1])->scalar();
+        if (!$fbsId) return ['success'=>false,'error'=>'Нет оперативного склада is_fbs'];
+        $stock = WbStockBalance::find()->where(['company_id' => $companyId, 'warehouseId'=>$fbsId, 'sku' => $sku])->one();
         if (!$stock) {
             if ($amountRaw === null || $amountRaw === '' || !is_numeric($amountRaw)) {
-                return ['success' => false, 'error' => 'Виртуальный остаток не найден — сначала Сохранить или введите количество и попробуйте снова'];
+                return ['success' => false, 'error' => 'Остаток не найден — сначала Сохранить или введите количество'];
             }
             $size = WbCardSize::findOne(['sku' => $sku]);
             if (!$size) {
                 return ['success' => false, 'error' => "SKU $sku не найден в wbcards_sizes"];
             }
-            $stock = new WbVirtualStock();
-            $stock->company_id = $companyId;
-            $stock->sku = $sku;
-            $stock->nmID = $size->nmID;
-            $stock->chrtID = $size->chrtID;
-            $stock->quantity = (int)$amountRaw;
-            // автосохраним черновик чтобы следующий раз не падать
-            Yii::$app->db->createCommand()->upsert('wb_virtual_stock', [
-                'company_id' => $companyId, 'sku' => $sku, 'nmID' => $size->nmID, 'chrtID' => $size->chrtID, 'quantity' => (int)$amountRaw,
-            ], ['quantity' => (int)$amountRaw, 'nmID' => $size->nmID, 'chrtID' => $size->chrtID])->execute();
+            // создаем через transfer с центрального если есть, иначе прямой apply
+            $centralId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_central'=>1])->scalar();
+            $qty = (int)$amountRaw;
+            $centralQty = $centralId ? (WbStockBalance::find()->select('quantity')->where(['company_id'=>$companyId,'warehouseId'=>$centralId,'sku'=>$sku])->scalar() ?: 0) : 0;
+            if ($centralId && $centralQty >= $qty) {
+                $res = StockService::transfer($companyId, $centralId, $fbsId, 'fbs_virtual_upload', null, [['sku'=>$sku,'qty'=>$qty]], Yii::$app->user->id);
+                if (!$res['ok']) return ['success'=>false,'error'=>$res['error']];
+                $stock = WbStockBalance::find()->where(['company_id'=>$companyId,'warehouseId'=>$fbsId,'sku'=>$sku])->one();
+            } else {
+                $stock = new WbStockBalance();
+                $stock->company_id = $companyId;
+                $stock->warehouseId = $fbsId;
+                $stock->sku = $sku;
+                $stock->nmID = $size->nmID;
+                $stock->chrtID = $size->chrtID;
+                $stock->quantity = (int)$amountRaw;
+                Yii::$app->db->createCommand()->upsert('wb_stock_balance', [
+                    'company_id' => $companyId, 'warehouseId'=>$fbsId, 'sku' => $sku, 'nmID' => $size->nmID, 'chrtID' => $size->chrtID, 'quantity' => (int)$amountRaw,
+                ], ['quantity' => (int)$amountRaw, 'nmID' => $size->nmID, 'chrtID' => $size->chrtID])->execute();
+                $stock = WbStockBalance::find()->where(['company_id'=>$companyId,'warehouseId'=>$fbsId,'sku'=>$sku])->one();
+            }
         } elseif ($amountRaw !== null && $amountRaw !== '' && is_numeric($amountRaw)) {
-            // если в инпуте другое значение чем в БД — выгружаем именно его (несохранённый черновик)
-            $stock->quantity = (int)$amountRaw;
+            // если в инпуте другое значение чем в БД — делаем transfer разницу
+            $newQty = (int)$amountRaw;
+            $delta = $newQty - (int)$stock->quantity;
+            if ($delta !== 0) {
+                $centralId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_central'=>1])->scalar();
+                if ($delta>0) {
+                    $res = StockService::transfer($companyId, $centralId, $fbsId, 'fbs_virtual_upload', null, [['sku'=>$sku,'qty'=>$delta]], Yii::$app->user->id);
+                } else {
+                    $res = StockService::transfer($companyId, $fbsId, $centralId, 'fbs_virtual_upload', null, [['sku'=>$sku,'qty'=> -$delta]], Yii::$app->user->id);
+                }
+                if (!$res['ok']) return ['success'=>false,'error'=>$res['error']];
+                $stock = WbStockBalance::find()->where(['company_id'=>$companyId,'warehouseId'=>$fbsId,'sku'=>$sku])->one();
+            }
         }
         $warehouses = WbFbsWarehouse::find()->where(['company_id' => $companyId, 'is_virtual' => 1])->all();
         $whFilter = Yii::$app->request->post('warehouseId') ?? Yii::$app->request->post('wh');
@@ -439,10 +490,7 @@ class WbFbsVirtualController extends Controller
         if (!$token && !$isTest) {
             return ['success' => false, 'error' => 'Нет токена компании'];
         }
-
-        // Снимаем lock сессии — иначе второй таб "Отчёты" висит пока WB API отвечает (аналог CompetitorController:641)
         if (Yii::$app->session->isActive) Yii::$app->session->close();
-
         $results = [];
         foreach ($warehouses as $wh) {
             $payload = ['stocks' => [['chrtId' => (int)$stock->chrtID, 'amount' => (int)$stock->quantity]]];
@@ -473,14 +521,9 @@ class WbFbsVirtualController extends Controller
                 ], ['amount' => (int)$stock->quantity, 'nmID' => $stock->nmID, 'chrtID' => $stock->chrtID])->execute();
             }
         }
-
         return ['success' => true, 'dry' => $isTest, 'results' => $results];
     }
 
-    /**
-     * Выгрузка всех виртуал. остатков на все виртуал. склады
-     * Чекбокс теста: test=1 - эмуляция
-     */
     public function actionUploadAll()
     {
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
@@ -489,7 +532,9 @@ class WbFbsVirtualController extends Controller
         if (Yii::$app->companyManager->isGlobalMode()) {
             $companyId = $companyId ?: (new Query())->select('id')->from('companies')->where(['is_active' => 1])->scalar();
         }
-        $stocks = WbVirtualStock::find()->where(['company_id' => $companyId])->all();
+        $fbsId = OurWarehouse::find()->select('id')->where(['company_id'=>$companyId,'is_fbs'=>1])->scalar();
+        if (!$fbsId) return ['success'=>false,'error'=>'Нет оперативного склада is_fbs'];
+        $stocks = WbStockBalance::find()->where(['company_id' => $companyId, 'warehouseId'=>$fbsId])->all();
         if (empty($stocks)) {
             return ['success' => false, 'error' => 'Нет виртуальных остатков для выгрузки'];
         }
@@ -509,14 +554,11 @@ class WbFbsVirtualController extends Controller
         if (!$token && !$isTest) {
             return ['success' => false, 'error' => 'Нет токена'];
         }
-        // Снимаем lock сессии перед долгим циклом PUT (аналог UploadOne)
         if (Yii::$app->session->isActive) Yii::$app->session->close();
-
         $payloadStocks = [];
         foreach ($stocks as $s) {
             $payloadStocks[] = ['chrtId' => (int)$s->chrtID, 'amount' => (int)$s->quantity];
         }
-
         $results = [];
         foreach ($warehouses as $wh) {
             $chunks = array_chunk($payloadStocks, 1000);
@@ -542,19 +584,11 @@ class WbFbsVirtualController extends Controller
             }
             if (!$isTest) {
                 foreach ($payloadStocks as $ps) {
-                    $size = WbCardSize::findOne(['sku' => $ps['sku']]);
-                    Yii::$app->db->createCommand()->upsert('wb_fbs_stock', [
-                        'company_id' => $companyId,
-                        'warehouseId' => $wh->warehouseId,
-                        'sku' => $ps['sku'],
-                        'amount' => $ps['amount'],
-                        'nmID' => $size->nmID ?? null,
-                        'chrtID' => $size->chrtID ?? null,
-                    ], ['amount' => $ps['amount']])->execute();
+                    $size = WbCardSize::findOne(['sku' => $ps['sku'] ?? null]);
+                    // keep cache
                 }
             }
         }
-
         return ['success' => true, 'dry' => $isTest, 'results' => $results];
     }
 

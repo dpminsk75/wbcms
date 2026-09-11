@@ -169,7 +169,6 @@ class MenuHelper
             'items' => [
                 ['label' => 'Управление остатками', 'url' => ['/wb-fbs-virtual/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
                 ['label' => 'Документы', 'url' => ['/wb-doc/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
-                ['label' => 'Склады', 'url' => ['/our-warehouse/index'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
                 ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
                 ['label' => 'Наличие', 'url' => ['/wb-doc-report/balance'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
                 ['label' => 'Оборотная ведомость', 'url' => ['/wb-doc-report/turnover'], 'visible' => Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
@@ -181,15 +180,18 @@ class MenuHelper
             [
                 'label' => 'Справочники',
                 'icon' => 'book',
-                'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin'),
+                'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin'),
                 'visibleIn' => ['top', 'side'],
                 'url' => ['#'],
                 'options' => ['class' => 'wb-menu__item'],
                 'items' => [
-                    ['label' => 'Карточки WB',      'url' => ['/wb/cards']],
-                    ['label' => 'Теги',             'url' => ['/tag/index']],
-                    ['label' => 'Товары',           'url' => ['/product/index']],
-                    ['label' => 'Составные товары', 'url' => ['/product-wb-card/index']],
+                    ['label' => 'Карточки WB',      'url' => ['/wb/cards'], 'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                    ['label' => 'Склады',           'url' => ['/our-warehouse/index'], 'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                    ['label' => 'Виртуальные склады', 'url' => ['/wb-fbs-virtual/warehouse-list'], 'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('manageFbsStocks') || Yii::$app->user->can('admin')],
+                    ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
+                    ['label' => 'Теги',             'url' => ['/tag/index'], 'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin')],
+                    ['label' => 'Товары',           'url' => ['/product/index'], 'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin')],
+                    ['label' => 'Составные товары', 'url' => ['/product-wb-card/index'], 'visible' => Yii::$app->user->can('viewReports') || Yii::$app->user->can('admin')],
                 ],
             ],
 
