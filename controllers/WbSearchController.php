@@ -691,4 +691,116 @@ public function actionTrend()
 
 
 
+public function actionAnalytics()
+{
+    $days = 30;
+    $params = \app\components\UniversalFilterWidget::getParams('phrase_text', $days);
+    $dateFrom = $params['date_from'];
+    $dateTo   = $params['date_to'];
+    $q = trim($params['id'] ?? '');
+    if (is_numeric($q)) {
+        $m = \app\models\WbPhrasesDirectory::findOne((int)$q);
+        if ($m) $q = $m->phrase;
+    }
+
+    $n = (int)((strtotime($dateTo) - strtotime($dateFrom)) / 86400) + 1;
+    $prevTo = date('Y-m-d', strtotime($dateFrom . ' -1 day'));
+    $prevFrom = date('Y-m-d', strtotime($prevTo . ' -' . ($n - 1) . ' days'));
+
+    // Дневные срезы: MAX частоты (дедуп nmID — фраза приходит по нескольким
+    // артикулам), позиции только по ненулевым (0 = нет данных).
+    $query = (new \yii\db\Query())
+        ->select([
+            'phrase',
+            'date',
+            'MAX(week_frequency) as freq',
+            'AVG(NULLIF(avg_position, 0)) as avg_pos',
+            'MIN(NULLIF(avg_position, 0)) as best_pos',
+            'SUM(clicks) as clicks',
+            'SUM(orders) as orders',
+        ])
+        ->from('wb_sr_report_item_phrases')
+        ->where(['between', 'date', $prevFrom, $dateTo]);
+    if ($q !== '') {
+        $query->andWhere(['like', 'phrase', $q]);
+    }
+    $query->groupBy(['phrase', 'date']);
+    $rows = $query->all();
+
+    $cur = [];
+    $prev = [];
+    foreach ($rows as $r) {
+        $cell = [
+            'freq' => (int)$r['freq'],
+            'pos' => $r['avg_pos'] === null ? null : (float)$r['avg_pos'],
+            'best' => $r['best_pos'] === null ? null : (int)$r['best_pos'],
+            'clicks' => (int)$r['clicks'],
+            'orders' => (int)$r['orders'],
+        ];
+        if ($r['date'] >= $dateFrom) {
+            $cur[$r['phrase']][] = $cell;
+        } else {
+            $prev[$r['phrase']][] = $cell;
+        }
+    }
+
+    // Товаров с запросом за текущий период — одним запросом.
+    $gq = (new \yii\db\Query())
+        ->select(['phrase', 'COUNT(DISTINCT nmID) as goods'])
+        ->from('wb_sr_report_item_phrases')
+        ->where(['between', 'date', $dateFrom, $dateTo]);
+    if ($q !== '') {
+        $gq->andWhere(['like', 'phrase', $q]);
+    }
+    $gq->groupBy(['phrase']);
+    $goods = \yii\helpers\ArrayHelper::map($gq->all(), 'phrase', 'goods');
+
+    $models = [];
+    foreach ($cur as $phrase => $cells) {
+        $freqs = array_column($cells, 'freq');
+        if (max($freqs) <= 1) {
+            continue; // отсекаем пустые
+        }
+        $avgC = (int)round(array_sum($freqs) / count($freqs));
+        $pFreqs = isset($prev[$phrase]) ? array_column($prev[$phrase], 'freq') : [];
+        $avgP = $pFreqs ? (int)round(array_sum($pFreqs) / count($pFreqs)) : 0;
+        $poses = array_filter(array_column($cells, 'pos'), fn($v) => $v !== null);
+        $bests = array_filter(array_column($cells, 'best'), fn($v) => $v !== null);
+        $models[] = [
+            'phrase' => $phrase,
+            'freq' => $avgC,
+            'freq_prev' => $avgP,
+            'delta' => $avgC - $avgP,
+            'total' => $avgC * $n,
+            'total_prev' => $avgP * $n,
+            'delta_total' => ($avgC - $avgP) * $n,
+            'is_new' => empty($pFreqs),
+            'goods' => (int)($goods[$phrase] ?? 0),
+            'avg_pos' => $poses ? round(array_sum($poses) / count($poses), 1) : null,
+            'best_pos' => $bests ? min($bests) : null,
+            'clicks' => array_sum(array_column($cells, 'clicks')),
+            'orders' => array_sum(array_column($cells, 'orders')),
+        ];
+    }
+
+    return $this->render('analytics', [
+        'dataProvider' => new \yii\data\ArrayDataProvider([
+            'allModels' => $models,
+            'pagination' => ['pageSize' => 50],
+            'sort' => [
+                'attributes' => ['phrase', 'total', 'delta_total', 'freq', 'goods', 'avg_pos', 'best_pos', 'clicks', 'orders'],
+                'defaultOrder' => ['total' => SORT_DESC],
+            ],
+        ]),
+        'phraseText' => $params['id'] ?? null,
+        'dateFrom' => $dateFrom,
+        'dateTo' => $dateTo,
+        'prevFrom' => $prevFrom,
+        'prevTo' => $prevTo,
+        'defaultDays' => $days,
+    ]);
+}
+
+
+
 }

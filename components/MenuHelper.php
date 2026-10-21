@@ -90,6 +90,7 @@ class MenuHelper
                 ['label' => 'Карточка -> фразы', 'url' => ['/wb-search/card']],
                 ['label' => 'Фраза -> карточки',  'url' => ['/wb-search/phrase']],
                 ['label' => 'Анализ фраз',        'url' => ['/wb-search/trend']],
+                ['label' => 'Частотность запросов', 'url' => ['/wb-search/analytics']],
                 ['label' => '', 'url' => '#', 'divider' => true, 'visibleIn' => ['top', 'side']],
                 ['label' => 'SEO рекомендации', 'url' => ['/seo/index'], 'visible' => Yii::$app->user->can('viewSeo') || Yii::$app->user->can('admin')],
                 ['label' => 'SEO просмотренные', 'url' => ['/seo/index','status'=>'viewed'], 'visible' => Yii::$app->user->can('viewSeo') || Yii::$app->user->can('admin')],
