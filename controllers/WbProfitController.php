@@ -36,6 +36,7 @@ class WbProfitController extends Controller
         $dateTo   = $request->get('dateTo', date('Y-m-d'));
         $sortBy   = $request->get('sortBy', 'qnt'); // qnt, amount, net_profit
         $limit    = (int)$request->get('limit', 20);  // 20, 50, 200
+        $withStock = (int)$request->get('withStock', 0) === 1;
 
         // Валидация сортировки во избежание инъекций
         if (!in_array($sortBy, ['qnt', 'amount', 'net_profit','clean_margin'])) {
@@ -113,8 +114,16 @@ class WbProfitController extends Controller
             ->orderBy([$sortBy => SORT_DESC])
             ->limit($limit);
 
+        $rows = $query->all();
+
+        // Остатки по складам WB (Склад WB) — опционально, чекбокс «выводить остаток»
+        $stockDate = null;
+        if ($withStock) {
+            [$rows, $stockDate] = $this->attachStocks($rows, $dateTo);
+        }
+
         $dataProvider = new \yii\data\ArrayDataProvider([
-            'allModels' => $query->all(),
+            'allModels' => $rows,
             'pagination' => false, // Для ТОП-листов пагинация обычно отключается
             'sort' => false, // Сортировка уже жестко задана в БД по параметру фильтра
         ]);
@@ -125,7 +134,58 @@ class WbProfitController extends Controller
             'dateTo'       => $dateTo,
             'sortBy'       => $sortBy,
             'limit'        => $limit,
+            'withStock'    => $withStock,
+            'stockDate'    => $stockDate,
         ]);
+    }
+
+    /**
+     * Добавляет к строкам остаток по складам WB (таблица wb_stocks) на дату «по».
+     * Дата снимка: MAX(date) WHERE date <= dateTo (фолбэк, если на dateTo снимка нет).
+     * nm_id в wb_stocks — varchar, поэтому сравниваем строками (иначе индекс не используется).
+     *
+     * @return array [rows, stockDate|null]
+     */
+    protected function attachStocks(array $rows, string $dateTo): array
+    {
+        $stockDateQuery = (new \yii\db\Query())
+            ->select(['d' => 'MAX(s.date)'])
+            ->from(['s' => 'wb_stocks'])
+            ->where(['<=', 's.date', $dateTo]);
+        \Yii::$app->companyManager->applyToQuery($stockDateQuery, 's');
+        $stockDate = $stockDateQuery->scalar();
+
+        if (!$stockDate || empty($rows)) {
+            foreach ($rows as &$row) {
+                $row['stock'] = 0;
+            }
+            unset($row);
+            return [$rows, $stockDate];
+        }
+
+        $nmIds = [];
+        foreach ($rows as $row) {
+            $nmIds[(string)$row['nm_id']] = (string)$row['nm_id'];
+        }
+
+        $stocksQuery = (new \yii\db\Query())
+            ->select(['nm_id', 'stock' => 'SUM(s.quantity)'])
+            ->from(['s' => 'wb_stocks'])
+            ->where(['s.date' => $stockDate, 's.nm_id' => array_values($nmIds)])
+            ->groupBy(['s.nm_id']);
+        \Yii::$app->companyManager->applyToQuery($stocksQuery, 's');
+
+        $map = [];
+        foreach ($stocksQuery->all() as $s) {
+            $map[(string)$s['nm_id']] = (int)$s['stock'];
+        }
+
+        foreach ($rows as &$row) {
+            $row['stock'] = $map[(string)$row['nm_id']] ?? 0;
+        }
+        unset($row);
+
+        return [$rows, $stockDate];
     }
 
 }

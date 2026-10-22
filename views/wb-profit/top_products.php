@@ -13,6 +13,8 @@ Icon::map($this);
 /* @var $dateTo string */
 /* @var $sortBy string */
 /* @var $limit int */
+/* @var $withStock bool */
+/* @var $stockDate string|null */
 
 $this->title = "ТОП-{$limit} товаров за период";  
 $this->params['breadcrumbs'][] = $this->title;
@@ -60,6 +62,16 @@ $this->params['breadcrumbs'][] = $this->title;
                 <?= Html::submitButton('<i class="fas fa-filter"></i> Применить фильтр', ['class' => 'btn btn-primary']) ?>
             </div>
 
+            <div class="col-md-12">
+                <div class="form-check mt-1">
+                    <?= Html::checkbox('withStock', $withStock, ['id' => 'withStock', 'value' => '1', 'class' => 'form-check-input']) ?>
+                    <label class="form-check-label" for="withStock">Выводить остаток</label>
+                    <?php if ($withStock && !empty($stockDate)): ?>
+                        <span class="text-muted small ms-2">Остатки на: <?= Html::encode(date('d.m.Y', strtotime($stockDate))) ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <?= Html::endForm() ?>
         </div>
     </div>
@@ -87,7 +99,8 @@ $this->params['breadcrumbs'][] = $this->title;
             'type' => GridView::TYPE_PRIMARY,
             'heading' => '<i class="fas fa-crown"></i> ' . Html::encode($this->title),
             'headingOptions' => ['class' => 'card-header text-white bg-wb-green-deep-header'],
-            'before' => Html::encode("Период анализа: c " . date('d.m.Y', strtotime($dateFrom)) . " по " . date('d.m.Y', strtotime($dateTo))),
+            'before' => Html::encode("Период анализа: c " . date('d.m.Y', strtotime($dateFrom)) . " по " . date('d.m.Y', strtotime($dateTo)))
+                . ($withStock && !empty($stockDate) ? ' | Остатки на: ' . date('d.m.Y', strtotime($stockDate)) : ''),
             'footer' => false,
         ],
         'columns' => [
@@ -458,6 +471,16 @@ $this->params['breadcrumbs'][] = $this->title;
                         $class = $model['clean_margin'] < 0 ? 'text-danger' : 'text-success';
                         return ['class' => $class, 'style' => 'font-weight: bold; font-style: italic; background-color: #fafafa;'];
                     },
+                ],
+
+                [
+                    'attribute' => 'stock',
+                    'label' => 'Остаток',
+                    'format' => ['decimal', 0],
+                    'hAlign' => 'right',
+                    'visible' => $withStock,
+                    'headerOptions' => ['style' => 'text-align: center; vertical-align: middle;'],
+                    'contentOptions' => ['style' => 'vertical-align: middle; background-color: #eef4fb;'],
                 ],
 
         ],
