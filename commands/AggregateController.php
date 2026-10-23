@@ -142,7 +142,7 @@ class AggregateController extends Controller
         $this->stdout("-> Обновление финансовой сводки (agg_daily_summary) за $dateFrom - $dateTo...\n");
 
         $sql = "INSERT INTO `agg_daily_summary` (
-                    company_id, sdate, nm_id, qnt, amount, `return`, commission, f_retail_amount, f_acquiring_fee,
+                    company_id, sdate, nm_id, qnt, sales_qnt, return_qnt, amount, `return`, commission, f_retail_amount, f_acquiring_fee,
                     f_acceptance, f_delivery, f_storage_fee, f_penalty, f_deduction, f_otziv, f_adv, f_cashback, 
                     net_profit, f_nds, f_cost_price
                 )
@@ -155,6 +155,8 @@ class AggregateController extends Controller
                             WHEN p.supplier_oper_name = 'Возврат' THEN -1 
                             ELSE 0 
                         END) AS qnt,
+                    SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN COALESCE(p.quantity, 0) ELSE 0 END) AS sales_qnt,
+                    SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN COALESCE(p.quantity, 0) ELSE 0 END) AS return_qnt,
                     SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) AS amount,
                     SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END) AS `return`,
                     SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub * p.commission_percent / 100 ELSE 0 END) AS commission,
@@ -181,25 +183,44 @@ class AggregateController extends Controller
                         - SUM(p.cashback_amount)
                     ) AS net_profit,
 
-                    -- 1. Выделение НДС с учетом company_id
+                    -- 1. Выделение НДС: база = (оборот) − (себестоимость × кол-во реализованного)
                     CASE 
                         WHEN MAX(DATE(p.sale_dt)) < '2026-01-01' THEN 0.00
-                        ELSE ROUND((
-                            SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) - 
-                            SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END)
-                        ) * COALESCE((
-                            SELECT n.nds 
-                            FROM wbcards_nds n 
-                            WHERE n.nmID = p.nm_id AND n.load_date <= MAX(DATE(p.sale_dt))
-                            ORDER BY n.load_date DESC, n.id DESC 
-                            LIMIT 1
-                        ), 0) / (100 + COALESCE((
-                            SELECT n.nds 
-                            FROM wbcards_nds n 
-                            WHERE n.nmID = p.nm_id AND n.load_date <= MAX(DATE(p.sale_dt))
-                            ORDER BY n.load_date DESC, n.id DESC 
-                            LIMIT 1
-                        ), 0)), 2)
+                        ELSE ROUND(
+                            GREATEST(
+                                COALESCE(
+                                    (
+                                        SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) - 
+                                        SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END)
+                                    )
+                                    -
+                                    (
+                                        (SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN 1 ELSE 0 END) - 
+                                         SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN 1 ELSE 0 END))
+                                        * COALESCE((
+                                            SELECT c.price 
+                                            FROM wbcards_costs c 
+                                            WHERE c.nmID = p.nm_id AND c.load_date <= MAX(DATE(p.sale_dt))
+                                            ORDER BY c.load_date DESC, c.id DESC 
+                                            LIMIT 1
+                                        ), 0)
+                                    )
+                                , 0), 0)
+                            * COALESCE((
+                                SELECT n.nds 
+                                FROM wbcards_nds n 
+                                WHERE n.nmID = p.nm_id AND n.load_date <= MAX(DATE(p.sale_dt))
+                                ORDER BY n.load_date DESC, n.id DESC 
+                                LIMIT 1
+                            ), 0)
+                            / (100 + COALESCE((
+                                SELECT n.nds 
+                                FROM wbcards_nds n 
+                                WHERE n.nmID = p.nm_id AND n.load_date <= MAX(DATE(p.sale_dt))
+                                ORDER BY n.load_date DESC, n.id DESC 
+                                LIMIT 1
+                            ), 0))
+                        , 2)
                     END AS f_nds,
 
                     -- 2. Общая себестоимость
@@ -220,6 +241,8 @@ class AggregateController extends Controller
                 GROUP BY p.company_id, DATE(p.sale_dt), p.nm_id
                 ON DUPLICATE KEY UPDATE 
                     qnt = VALUES(qnt),
+                    sales_qnt = VALUES(sales_qnt),
+                    return_qnt = VALUES(return_qnt),
                     amount = VALUES(amount),
                     `return` = VALUES(`return`),
                     commission = VALUES(commission),
