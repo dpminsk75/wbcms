@@ -75,16 +75,18 @@ class WbProfitService
                 'f_deduction'       => new Expression("SUM(p.f_deduction)"),
                 'f_otziv'           => new Expression("SUM(p.ff_otziv)"),
                 'f_adv'             => new Expression("SUM(p.ff_adv)"),
+                // Хранение: ff_storage_fee (отчёт WB по позициям) — отчёт по товарам.
+                'f_storage_fee'     => new Expression("SUM(IFNULL(p.ff_storage_fee, 0))"),
                 'f_cashback'        => new Expression("SUM(p.f_cashback)"),
                 'net_profit'        => new Expression("SUM(p.net_profit)"),
                 'total_nds'         => new Expression("SUM(f_nds)"),
                 'total_cost'        => new Expression("SUM(f_cost_price)"),
-                'profit_before_tax' => new Expression("SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price) -SUM(ff_otziv)-SUM(ff_adv)"),
-                'tax_amount'        => new Expression("GREATEST(0, SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price) -SUM(ff_otziv)-SUM(ff_adv)) * 0.07"),
-                'clean_margin'      => new Expression("(SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price) -SUM(ff_otziv)-SUM(ff_adv)) - (GREATEST(0, SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price) -SUM(ff_otziv)-SUM(ff_adv)) * 0.07)"),
+                'profit_before_tax' => new Expression("SUM(net_profit) - SUM(IFNULL(f_nds,0)) - SUM(IFNULL(f_cost_price,0)) -SUM(IFNULL(ff_otziv,0))-SUM(IFNULL(ff_adv,0))-SUM(IFNULL(ff_storage_fee,0))"),
+                'tax_amount'        => new Expression("GREATEST(0, SUM(net_profit) - SUM(IFNULL(f_nds,0)) - SUM(IFNULL(f_cost_price,0)) -SUM(IFNULL(ff_otziv,0))-SUM(IFNULL(ff_adv,0))-SUM(IFNULL(ff_storage_fee,0))) * 0.07"),
+                'clean_margin'      => new Expression("(SUM(net_profit) - SUM(IFNULL(f_nds,0)) - SUM(IFNULL(f_cost_price,0)) -SUM(IFNULL(ff_otziv,0))-SUM(IFNULL(ff_adv,0))-SUM(IFNULL(ff_storage_fee,0))) - (GREATEST(0, SUM(net_profit) - SUM(IFNULL(f_nds,0)) - SUM(IFNULL(f_cost_price,0)) -SUM(IFNULL(ff_otziv,0))-SUM(IFNULL(ff_adv,0))-SUM(IFNULL(ff_storage_fee,0))) * 0.07)"),
                 'amount_per_item'   => new Expression("SUM(amount) / NULLIF(SUM(qnt), 0)"),
                 'profit_per_item'   => new Expression("SUM(net_profit) / NULLIF(SUM(qnt), 0)"),
-                'clear_per_item'    => new Expression("((SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)-SUM(ff_otziv)-SUM(ff_adv)) - (GREATEST(0, SUM(net_profit) - SUM(f_nds) - SUM(f_cost_price)-SUM(ff_otziv)-SUM(ff_adv)) * 0.07)) / NULLIF(SUM(qnt), 0)"),
+                'clear_per_item'    => new Expression("((SUM(net_profit) - SUM(IFNULL(f_nds,0)) - SUM(IFNULL(f_cost_price,0))-SUM(IFNULL(ff_otziv,0))-SUM(IFNULL(ff_adv,0))-SUM(IFNULL(ff_storage_fee,0))) - (GREATEST(0, SUM(net_profit) - SUM(IFNULL(f_nds,0)) - SUM(IFNULL(f_cost_price,0))-SUM(IFNULL(ff_otziv,0))-SUM(IFNULL(ff_adv,0))-SUM(IFNULL(ff_storage_fee,0))) * 0.07)) / NULLIF(SUM(qnt), 0)"),
                 'cost_per_item'     => new Expression("SUM(f_cost_price) / NULLIF(SUM(qnt), 0)"), 
             ])
             ->from(['p' => 'agg_daily_summary'])

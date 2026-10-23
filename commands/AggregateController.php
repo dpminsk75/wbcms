@@ -71,6 +71,25 @@ class AggregateController extends Controller
             }
         }
 
+        // Шаги-дополнения к сводке (ff_*). ВАЖНО: runUpdateDailySummary делает
+        // INSERT ... ON DUPLICATE KEY UPDATE (ff_* сохраняются), но в любом случае
+        // считаем их заново — после пересборки сводки они должны быть свежими.
+        foreach ([
+            ['update-feedbacks-cost', 'Отзывы (ff_otziv)'],
+            ['update-adv-costs', 'Реклама (ff_adv)'],
+            ['update-storage-costs', 'Платное хранение (ff_storage_fee)'],
+        ] as [$route, $label]) {
+            try {
+                $code = (int) Yii::$app->runAction("aggregate/{$route}", [$dateFrom, $dateTo]);
+                if ($code !== ExitCode::OK) {
+                    $failed[] = $label;
+                }
+            } catch (\Throwable $e) {
+                $failed[] = $label;
+                $this->stderr("[ОШИБКА] {$label}: " . $e->getMessage() . "\n", Console::FG_RED);
+            }
+        }
+
         // Сбрасываем кэш дашборда
         Yii::$app->cache->delete('monthly_finance_dashboard_data');
 
@@ -146,119 +165,121 @@ class AggregateController extends Controller
                     f_acceptance, f_delivery, f_storage_fee, f_penalty, f_deduction, f_otziv, f_adv, f_cashback, 
                     net_profit, f_nds, f_cost_price
                 )
-                SELECT 
-                    p.company_id AS company_id,
-                    DATE(p.sale_dt) AS sdate,
-                    p.nm_id,
-                    SUM(CASE 
-                            WHEN p.supplier_oper_name = 'Продажа' THEN 1 
-                            WHEN p.supplier_oper_name = 'Возврат' THEN -1 
-                            ELSE 0 
-                        END) AS qnt,
-                    SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN COALESCE(p.quantity, 0) ELSE 0 END) AS sales_qnt,
-                    SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN COALESCE(p.quantity, 0) ELSE 0 END) AS return_qnt,
-                    SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) AS amount,
-                    SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END) AS `return`,
-                    SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub * p.commission_percent / 100 ELSE 0 END) AS commission,
-                    SUM(p.retail_amount) AS f_retail_amount,
-                    SUM(p.acquiring_fee) AS f_acquiring_fee,
-                    SUM(p.acceptance) AS f_acceptance,
-                    SUM(p.delivery_rub) AS f_delivery,
-                    SUM(p.storage_fee) AS f_storage_fee,
-                    SUM(p.penalty) AS f_penalty,
-                    SUM(p.deduction) AS f_deduction,
-                    SUM(CASE WHEN p.bonus_type_name LIKE 'Списание за отзыв%' THEN p.deduction ELSE 0 END) AS f_otziv,
-                    SUM(CASE WHEN p.bonus_type_name LIKE '%WB Продвижение%' THEN p.deduction ELSE 0 END) AS f_adv,
-                    SUM(p.cashback_amount) AS f_cashback,
-                    (
-                        SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) 
-                        - SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END)
-                        - SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub * p.commission_percent / 100 ELSE 0 END)
-                        - SUM(p.acquiring_fee) 
-                        - SUM(p.acceptance)
-                        - SUM(p.delivery_rub) 
-                        - SUM(p.storage_fee)
-                        - SUM(p.penalty) 
-                        - SUM(p.deduction) 
-                        - SUM(p.cashback_amount)
-                    ) AS net_profit,
+                SELECT * FROM (
+                    SELECT 
+                        p.company_id AS company_id,
+                        DATE(p.sale_dt) AS sdate,
+                        p.nm_id,
+                        SUM(CASE 
+                                WHEN p.supplier_oper_name = 'Продажа' THEN 1 
+                                WHEN p.supplier_oper_name = 'Возврат' THEN -1 
+                                ELSE 0 
+                            END) AS qnt,
+                        SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN COALESCE(p.quantity, 0) ELSE 0 END) AS sales_qnt,
+                        SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN COALESCE(p.quantity, 0) ELSE 0 END) AS return_qnt,
+                        SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) AS amount,
+                        SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END) AS `return`,
+                        SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub * p.commission_percent / 100 ELSE 0 END) AS commission,
+                        SUM(p.retail_amount) AS f_retail_amount,
+                        SUM(p.acquiring_fee) AS f_acquiring_fee,
+                        SUM(p.acceptance) AS f_acceptance,
+                        SUM(p.delivery_rub) AS f_delivery,
+                        SUM(p.storage_fee) AS f_storage_fee,
+                        SUM(p.penalty) AS f_penalty,
+                        SUM(p.deduction) AS f_deduction,
+                        SUM(CASE WHEN p.bonus_type_name LIKE 'Списание за отзыв%' THEN p.deduction ELSE 0 END) AS f_otziv,
+                        SUM(CASE WHEN p.bonus_type_name LIKE '%WB Продвижение%' THEN p.deduction ELSE 0 END) AS f_adv,
+                        SUM(p.cashback_amount) AS f_cashback,
+                        (
+                            SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) 
+                            - SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END)
+                            - SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub * p.commission_percent / 100 ELSE 0 END)
+                            - SUM(p.acquiring_fee) 
+                            - SUM(p.acceptance)
+                            - SUM(p.delivery_rub) 
+                            - SUM(p.storage_fee)
+                            - SUM(p.penalty) 
+                            - SUM(p.deduction) 
+                            - SUM(p.cashback_amount)
+                        ) AS net_profit,
 
-                    -- 1. Выделение НДС: база = (оборот) − (себестоимость × кол-во реализованного)
-                    CASE 
-                        WHEN MAX(DATE(p.sale_dt)) < '2026-01-01' THEN 0.00
-                        ELSE ROUND(
-                            GREATEST(
-                                COALESCE(
-                                    (
-                                        SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) - 
-                                        SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END)
-                                    )
-                                    -
-                                    (
-                                        (SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN 1 ELSE 0 END) - 
-                                         SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN 1 ELSE 0 END))
-                                        * COALESCE((
-                                            SELECT c.price 
-                                            FROM wbcards_costs c 
-                                            WHERE c.nmID = p.nm_id AND c.load_date <= MAX(DATE(p.sale_dt))
-                                            ORDER BY c.load_date DESC, c.id DESC 
-                                            LIMIT 1
-                                        ), 0)
-                                    )
-                                , 0), 0)
-                            * COALESCE((
-                                SELECT n.nds 
-                                FROM wbcards_nds n 
-                                WHERE n.nmID = p.nm_id AND n.load_date <= MAX(DATE(p.sale_dt))
-                                ORDER BY n.load_date DESC, n.id DESC 
-                                LIMIT 1
-                            ), 0)
-                            / (100 + COALESCE((
-                                SELECT n.nds 
-                                FROM wbcards_nds n 
-                                WHERE n.nmID = p.nm_id AND n.load_date <= MAX(DATE(p.sale_dt))
-                                ORDER BY n.load_date DESC, n.id DESC 
-                                LIMIT 1
-                            ), 0))
-                        , 2)
-                    END AS f_nds,
+                        -- 1. Выделение НДС: база = (оборот) − (себестоимость × кол-во реализованного)
+                        CASE 
+                            WHEN MAX(DATE(p.sale_dt)) < '2026-01-01' THEN 0.00
+                            ELSE ROUND(
+                                GREATEST(
+                                    COALESCE(
+                                        (
+                                            SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN p.retail_price_withdisc_rub ELSE 0 END) - 
+                                            SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN p.retail_price_withdisc_rub ELSE 0 END)
+                                        )
+                                        -
+                                        (
+                                            (SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN 1 ELSE 0 END) - 
+                                             SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN 1 ELSE 0 END))
+                                            * COALESCE((
+                                                SELECT c.price 
+                                                FROM wbcards_costs c 
+                                                WHERE c.nmID = p.nm_id AND c.load_date <= MAX(DATE(p.sale_dt))
+                                                ORDER BY c.load_date DESC, c.id DESC 
+                                                LIMIT 1
+                                            ), 0)
+                                        )
+                                    , 0), 0)
+                                * COALESCE((
+                                    SELECT n.nds 
+                                    FROM wbcards_nds n 
+                                    WHERE n.nmID = p.nm_id AND n.load_date <= MAX(DATE(p.sale_dt))
+                                    ORDER BY n.load_date DESC, n.id DESC 
+                                    LIMIT 1
+                                ), 0)
+                                / (100 + COALESCE((
+                                    SELECT n.nds 
+                                    FROM wbcards_nds n 
+                                    WHERE n.nmID = p.nm_id AND n.load_date <= MAX(DATE(p.sale_dt))
+                                    ORDER BY n.load_date DESC, n.id DESC 
+                                    LIMIT 1
+                                ), 0))
+                            , 2)
+                        END AS f_nds,
 
-                    -- 2. Общая себестоимость
-                    ROUND((
-                        SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN 1 ELSE 0 END) - 
-                        SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN 1 ELSE 0 END)
-                    ) * COALESCE((
-                        SELECT c.price 
-                        FROM wbcards_costs c 
-                        WHERE c.nmID = p.nm_id AND c.load_date <= MAX(DATE(p.sale_dt))
-                        ORDER BY c.load_date DESC, c.id DESC 
-                        LIMIT 1
-                    ), 0), 2) AS f_cost_price
+                        -- 2. Общая себестоимость
+                        ROUND((
+                            SUM(CASE WHEN p.supplier_oper_name = 'Продажа' THEN 1 ELSE 0 END) - 
+                            SUM(CASE WHEN p.supplier_oper_name = 'Возврат' THEN 1 ELSE 0 END)
+                        ) * COALESCE((
+                            SELECT c.price 
+                            FROM wbcards_costs c 
+                            WHERE c.nmID = p.nm_id AND c.load_date <= MAX(DATE(p.sale_dt))
+                            ORDER BY c.load_date DESC, c.id DESC 
+                            LIMIT 1
+                        ), 0), 2) AS f_cost_price
 
-                FROM `detail_by_period` p
-                WHERE p.sale_dt BETWEEN :from AND :to
-                  AND p.company_id IS NOT NULL
-                GROUP BY p.company_id, DATE(p.sale_dt), p.nm_id
+                    FROM `detail_by_period` p
+                    WHERE p.sale_dt BETWEEN :from AND :to
+                      AND p.company_id IS NOT NULL
+                    GROUP BY p.company_id, DATE(p.sale_dt), p.nm_id
+                ) AS dt
                 ON DUPLICATE KEY UPDATE 
-                    qnt = VALUES(qnt),
-                    sales_qnt = VALUES(sales_qnt),
-                    return_qnt = VALUES(return_qnt),
-                    amount = VALUES(amount),
-                    `return` = VALUES(`return`),
-                    commission = VALUES(commission),
-                    f_retail_amount = VALUES(f_retail_amount),
-                    f_acquiring_fee = VALUES(f_acquiring_fee),
-                    f_acceptance = VALUES(f_acceptance),
-                    f_delivery = VALUES(f_delivery),
-                    f_storage_fee = VALUES(f_storage_fee),
-                    f_penalty = VALUES(f_penalty),
-                    f_deduction = VALUES(f_deduction),
-                    f_otziv = VALUES(f_otziv),
-                    f_adv = VALUES(f_adv),
-                    f_cashback = VALUES(f_cashback),
-                    net_profit = VALUES(net_profit),
-                    f_nds = VALUES(f_nds),
-                    f_cost_price = VALUES(f_cost_price)";
+                    qnt = dt.qnt,
+                    sales_qnt = dt.sales_qnt,
+                    return_qnt = dt.return_qnt,
+                    amount = dt.amount,
+                    `return` = dt.`return`,
+                    commission = dt.commission,
+                    f_retail_amount = dt.f_retail_amount,
+                    f_acquiring_fee = dt.f_acquiring_fee,
+                    f_acceptance = dt.f_acceptance,
+                    f_delivery = dt.f_delivery,
+                    f_storage_fee = dt.f_storage_fee,
+                    f_penalty = dt.f_penalty,
+                    f_deduction = dt.f_deduction,
+                    f_otziv = dt.f_otziv,
+                    f_adv = dt.f_adv,
+                    f_cashback = dt.f_cashback,
+                    net_profit = dt.net_profit,
+                    f_nds = dt.f_nds,
+                    f_cost_price = dt.f_cost_price";
 
         Yii::$app->db->createCommand($sql, [
             ':from' => $dateFrom . ' 00:00:00',
@@ -277,29 +298,31 @@ class AggregateController extends Controller
                     sales_qty, returns_qty, retail_amount_sum, 
                     ppvz_for_pay_sum, delivery_rub_sum, penalty_sum
                 )
-                SELECT 
-                    company_id as company_id,
-                    DATE(sale_dt) as sale_date,
-                    nm_id as nmID,
-                    MAX(subject_name),
-                    MAX(brand_name),
-                    SUM(CASE WHEN doc_type_name = 'Продажа' THEN quantity ELSE 0 END),
-                    SUM(CASE WHEN doc_type_name = 'Возврат' THEN quantity ELSE 0 END),
-                    SUM(retail_amount),
-                    SUM(ppvz_for_pay),
-                    SUM(delivery_rub),
-                    SUM(penalty)
-                FROM detail_by_period
-                WHERE sale_dt BETWEEN :from AND :to
-                  AND company_id IS NOT NULL
-                GROUP BY company_id, DATE(sale_dt), nm_id
+                SELECT * FROM (
+                    SELECT 
+                        company_id as company_id,
+                        DATE(sale_dt) as sale_date,
+                        nm_id as nmID,
+                        MAX(subject_name) as subject_name,
+                        MAX(brand_name) as brand_name,
+                        SUM(CASE WHEN doc_type_name = 'Продажа' THEN quantity ELSE 0 END) as sales_qty,
+                        SUM(CASE WHEN doc_type_name = 'Возврат' THEN quantity ELSE 0 END) as returns_qty,
+                        SUM(retail_amount) as retail_amount_sum,
+                        SUM(ppvz_for_pay) as ppvz_for_pay_sum,
+                        SUM(delivery_rub) as delivery_rub_sum,
+                        SUM(penalty) as penalty_sum
+                    FROM detail_by_period
+                    WHERE sale_dt BETWEEN :from AND :to
+                      AND company_id IS NOT NULL
+                    GROUP BY company_id, DATE(sale_dt), nm_id
+                ) AS dt
                 ON DUPLICATE KEY UPDATE 
-                    sales_qty = VALUES(sales_qty),
-                    returns_qty = VALUES(returns_qty),
-                    retail_amount_sum = VALUES(retail_amount_sum),
-                    ppvz_for_pay_sum = VALUES(ppvz_for_pay_sum),
-                    delivery_rub_sum = VALUES(delivery_rub_sum),
-                    penalty_sum = VALUES(penalty_sum)";
+                    sales_qty = dt.sales_qty,
+                    returns_qty = dt.returns_qty,
+                    retail_amount_sum = dt.retail_amount_sum,
+                    ppvz_for_pay_sum = dt.ppvz_for_pay_sum,
+                    delivery_rub_sum = dt.delivery_rub_sum,
+                    penalty_sum = dt.penalty_sum";
 
         Yii::$app->db->createCommand($sql, [
             ':from' => $dateFrom . ' 00:00:00',
@@ -316,30 +339,32 @@ class AggregateController extends Controller
                     orders_qty, retail_price_avg, retail_amount_sum, 
                     retail_with_disc_sum, ppvz_for_pay_sum, delivery_forecast_rub
                 )
-                SELECT 
-                    company_id as company_id,
-                    DATE(order_dt) as order_date,
-                    nm_id as nmID,
-                    MAX(subject_name),
-                    MAX(brand_name),
-                    site_country,
-                    SUM(quantity),
-                    AVG(retail_price),
-                    SUM(retail_amount),
-                    SUM(retail_price_withdisc_rub),
-                    SUM(ppvz_for_pay),
-                    SUM(quantity * dlv_prc)
-                FROM detail_by_period
-                WHERE order_dt BETWEEN :from AND :to
-                  AND doc_type_name = 'Продажа'
-                  AND company_id IS NOT NULL
-                GROUP BY company_id, DATE(order_dt), nm_id, site_country
+                SELECT * FROM (
+                    SELECT 
+                        company_id as company_id,
+                        DATE(order_dt) as order_date,
+                        nm_id as nmID,
+                        MAX(subject_name) as subject_name,
+                        MAX(brand_name) as brand_name,
+                        site_country as site_country,
+                        SUM(quantity) as orders_qty,
+                        AVG(retail_price) as retail_price_avg,
+                        SUM(retail_amount) as retail_amount_sum,
+                        SUM(retail_price_withdisc_rub) as retail_with_disc_sum,
+                        SUM(ppvz_for_pay) as ppvz_for_pay_sum,
+                        SUM(quantity * dlv_prc) as delivery_forecast_rub
+                    FROM detail_by_period
+                    WHERE order_dt BETWEEN :from AND :to
+                      AND doc_type_name = 'Продажа'
+                      AND company_id IS NOT NULL
+                    GROUP BY company_id, DATE(order_dt), nm_id, site_country
+                ) AS dt
                 ON DUPLICATE KEY UPDATE 
-                    orders_qty = VALUES(orders_qty),
-                    retail_amount_sum = VALUES(retail_amount_sum),
-                    retail_with_disc_sum = VALUES(retail_with_disc_sum),
-                    ppvz_for_pay_sum = VALUES(ppvz_for_pay_sum),
-                    delivery_forecast_rub = VALUES(delivery_forecast_rub)";
+                    orders_qty = dt.orders_qty,
+                    retail_amount_sum = dt.retail_amount_sum,
+                    retail_with_disc_sum = dt.retail_with_disc_sum,
+                    ppvz_for_pay_sum = dt.ppvz_for_pay_sum,
+                    delivery_forecast_rub = dt.delivery_forecast_rub";
 
         Yii::$app->db->createCommand($sql, [
             ':from' => $dateFrom . ' 00:00:00',
@@ -451,8 +476,8 @@ class AggregateController extends Controller
             $this->stdout("Обновление финансовой сводки (поле ff_otziv) по проверенным nmID...\n", Console::FG_CYAN);
             
             $updateSummarySql = "INSERT INTO `agg_daily_summary` (company_id, sdate, nm_id, ff_otziv)
-                                 VALUES (:company_id, :sdate, :nm_id, :cost)
-                                 ON DUPLICATE KEY UPDATE `ff_otziv` = VALUES(`ff_otziv`)";
+                                 VALUES (:company_id, :sdate, :nm_id, :cost) AS new
+                                 ON DUPLICATE KEY UPDATE `ff_otziv` = new.`ff_otziv`";
 
             foreach ($summaryUpdates as $update) {
                 $db->createCommand($updateSummarySql, [
@@ -479,17 +504,19 @@ class AggregateController extends Controller
 
         // INNER JOIN связывает таблицы строго по parent_id, дополнительно группируем и пишем company_id
         $sql = "INSERT INTO `agg_daily_summary` (company_id, sdate, nm_id, ff_adv)
-                SELECT 
-                    nms.`company_id`,
-                    s.`date` AS sdate,
-                    nms.`nm_id` AS nm_id,
-                    SUM(nms.`sum`) AS ff_adv
-                FROM `wb_campaign_stats_nms` nms
-                INNER JOIN `wb_campaign_stats` s ON nms.`parent_id` = s.`id` AND nms.`company_id` = s.`company_id`
-                WHERE s.`date` BETWEEN :from AND :to
-                GROUP BY nms.`company_id`, s.`date`, nms.`nm_id`
+                SELECT * FROM (
+                    SELECT 
+                        nms.`company_id` AS company_id,
+                        s.`date` AS sdate,
+                        nms.`nm_id` AS nm_id,
+                        SUM(nms.`sum`) AS ff_adv
+                    FROM `wb_campaign_stats_nms` nms
+                    INNER JOIN `wb_campaign_stats` s ON nms.`parent_id` = s.`id` AND nms.`company_id` = s.`company_id`
+                    WHERE s.`date` BETWEEN :from AND :to
+                    GROUP BY nms.`company_id`, s.`date`, nms.`nm_id`
+                ) AS dt
                 ON DUPLICATE KEY UPDATE 
-                    ff_adv = VALUES(ff_adv)";
+                    ff_adv = dt.ff_adv";
 
         try {
             Yii::$app->db->createCommand($sql, [
@@ -501,6 +528,50 @@ class AggregateController extends Controller
             return ExitCode::OK;
         } catch (\Exception $e) {
             $this->stderr("Ошибка при обновлении рекламы: " . $e->getMessage() . "\n", Console::FG_RED);
+            if (Yii::$app->db->getTransaction()) {
+                throw $e;
+            }
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+    }
+
+    /**
+     * ОТДЕЛЬНЫЙ ПУБЛИЧНЫЙ ВЫЗОВ: Платное хранение по позициям (ff_storage_fee)
+     * из отчёта WB «Платное хранение» (wb_paid_storage).
+     *
+     * ff_storage_fee — для ОТЧЁТОВ ПО ТОВАРАМ; f_storage_fee (детализация продаж) — для месячных.
+     * Upsert создаёт строки сводки там, где по товару не было продаж в этот день
+     * (начисления месячные — их нельзя терять).
+     */
+    public function actionUpdateStorageCosts($dateFrom = null, $dateTo = null)
+    {
+        $this->prepareDates($dateFrom, $dateTo);
+        $this->stdout("-> Обновление платного хранения (ff_storage_fee) по позициям за $dateFrom - $dateTo...\n");
+
+        $sql = "INSERT INTO `agg_daily_summary` (company_id, sdate, nm_id, ff_storage_fee)
+                SELECT * FROM (
+                    SELECT 
+                        company_id AS company_id,
+                        `date` AS sdate,
+                        nmId AS nm_id,
+                        SUM(warehousePrice) AS ff_storage_fee
+                    FROM `wb_paid_storage`
+                    WHERE `date` BETWEEN :from AND :to AND nmId IS NOT NULL
+                    GROUP BY company_id, `date`, nmId
+                ) AS dt
+                ON DUPLICATE KEY UPDATE 
+                    ff_storage_fee = dt.ff_storage_fee";
+
+        try {
+            Yii::$app->db->createCommand($sql, [
+                ':from' => $dateFrom,
+                ':to' => $dateTo
+            ])->execute();
+
+            $this->stdout("Платное хранение успешно интегрировано в финансовую сводку.\n", Console::FG_GREEN);
+            return ExitCode::OK;
+        } catch (\Exception $e) {
+            $this->stderr("Ошибка при обновлении платного хранения: " . $e->getMessage() . "\n", Console::FG_RED);
             if (Yii::$app->db->getTransaction()) {
                 throw $e;
             }

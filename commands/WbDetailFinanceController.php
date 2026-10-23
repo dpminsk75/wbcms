@@ -801,5 +801,6 @@ SUM(d.ppvz_sales_commission),
         \Yii::$app->runAction('/aggregate/update');
         \Yii::$app->runAction('aggregate/update-feedbacks-cost');
         \Yii::$app->runAction('aggregate/update-adv-costs');
+        \Yii::$app->runAction('aggregate/update-storage-costs');
     }
 }
